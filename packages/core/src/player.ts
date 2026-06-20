@@ -37,6 +37,15 @@ export async function playDemo(script: DemoScript, opts: PlayOptions): Promise<P
   let cursor: Point = { x: script.viewport.width / 2, y: script.viewport.height / 2 };
   recorder.sampleCursor(cursor.x, cursor.y);
 
+  // Record every top-level navigation — including client-side ones (form submits,
+  // SPA route changes) that no explicit `goto` step produces. The compositor uses
+  // these to reset the zoom when the page context changes, so a zoom started on
+  // one page never lingers over the next. `navigate()` de-dupes against the
+  // explicit `goto` records below.
+  session.page.on("framenavigated", (frame) => {
+    if (frame === session.page.mainFrame()) recorder.navigate(frame.url());
+  });
+
   try {
     // Brief lead-in so the recording doesn't start mid-motion.
     await sleep(400);
