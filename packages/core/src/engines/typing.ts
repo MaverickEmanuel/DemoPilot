@@ -19,6 +19,7 @@ export async function typeText(
   recorder: TimelineRecorder,
   text: string,
   cadence: TypeCadence,
+  speed = 1,
 ): Promise<void> {
   await locator.click();
   const { base, jitter } = CADENCE[cadence];
@@ -28,9 +29,10 @@ export async function typeText(
   } else {
     for (const ch of text) {
       await locator.pressSequentially(ch, { delay: 0 });
-      // Slightly longer pauses after word boundaries read as natural.
+      // Slightly longer pauses after word boundaries read as natural. The global
+      // `speed` multiplier scales the per-character cadence (faster > 1, slower < 1).
       const extra = ch === " " ? jitter : 0;
-      await sleep(base + Math.random() * jitter + extra);
+      await sleep((base + Math.random() * jitter + extra) / speed);
     }
   }
 

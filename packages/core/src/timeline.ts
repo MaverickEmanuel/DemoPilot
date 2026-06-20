@@ -44,6 +44,12 @@ export class TimelineRecorder {
     this.start = this.now();
   }
 
+  /** The clock value (e.g. Date.now()) at which this recorder's t=0 was set.
+   * Screencast capture uses it to align frame timestamps to the timeline. */
+  get startedAt(): number {
+    return this.start;
+  }
+
   private t(): number {
     return Math.max(0, this.now() - this.start);
   }

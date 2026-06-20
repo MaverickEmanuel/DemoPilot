@@ -3,7 +3,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StepSchema, DemoScriptSchema, playDemo, type DemoScript } from "@demopilot/core";
-import { renderDemo } from "@demopilot/compositor";
+import { renderDemo, resolveBundledFfmpeg } from "@demopilot/compositor";
 import { AuthoringSession } from "./session.js";
 import { resolveChromeForRemotion } from "./chrome.js";
 import { saveScript, loadScript, listScripts, renderDir, saveRenderMeta, type RenderMeta } from "./store.js";
@@ -143,9 +143,14 @@ export function registerTools(server: McpServer): void {
       const dir = renderDir(id);
       await mkdir(dir, { recursive: true });
 
+      // Prefer the crisper, constant-fps CDP screencast capture; fall back to
+      // the realtime recordVideo backend if ffmpeg can't be located.
+      const ffmpeg = resolveBundledFfmpeg();
       const { videoPath, timeline } = await playDemo(script, {
         videoDir: join(dir, "capture"),
         headless: headless ?? process.env.DEMOPILOT_HEADLESS !== "false",
+        capture: ffmpeg ? "screencast" : "recordVideo",
+        ffmpeg: ffmpeg ?? undefined,
       });
 
       const timelinePath = join(dir, "timeline.json");

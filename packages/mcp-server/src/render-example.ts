@@ -8,8 +8,8 @@ import { createServer, type Server } from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize } from "node:path";
-import { loadDemoScript, playDemo } from "@demopilot/core";
-import { renderDemo } from "@demopilot/compositor";
+import { loadDemoScript, playDemo, type Timeline } from "@demopilot/core";
+import { renderDemo, resolveBundledFfmpeg } from "@demopilot/compositor";
 import { resolveChromeForRemotion } from "./chrome.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -48,11 +48,28 @@ async function main(): Promise<void> {
     const script = await loadDemoScript(scriptPath);
     script.baseUrl = `http://localhost:${port}`;
 
-    console.log("[render:example] replaying + capturing…");
-    const { videoPath, timeline } = await playDemo(script, {
-      videoDir: join(repoRoot, "renders/.capture"),
-      headless: true,
-    });
+    // Prefer the crisper, constant-fps CDP screencast capture; fall back to the
+    // realtime recordVideo backend if ffmpeg can't be located, it's disabled, or
+    // the screencast capture fails for any reason (keeps this smoke render robust).
+    const ffmpeg = resolveBundledFfmpeg();
+    const videoDir = join(repoRoot, "renders/.capture");
+    const wantScreencast = process.env.DEMOPILOT_CAPTURE !== "recordVideo" && Boolean(ffmpeg);
+
+    let videoPath: string;
+    let timeline: Timeline;
+    try {
+      console.log(`[render:example] replaying + capturing (${wantScreencast ? "screencast" : "recordVideo"})…`);
+      ({ videoPath, timeline } = await playDemo(script, {
+        videoDir,
+        headless: true,
+        capture: wantScreencast ? "screencast" : "recordVideo",
+        ffmpeg: ffmpeg ?? undefined,
+      }));
+    } catch (err) {
+      if (!wantScreencast) throw err;
+      console.warn(`[render:example] screencast capture failed (${(err as Error).message}); falling back to recordVideo`);
+      ({ videoPath, timeline } = await playDemo(script, { videoDir, headless: true, capture: "recordVideo" }));
+    }
 
     // Persist the intermediate artifacts so capture problems can be separated
     // from compositing problems (analyze timeline.json; inspect the clean webm).

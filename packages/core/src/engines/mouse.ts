@@ -46,6 +46,7 @@ export async function moveCursor(
   from: Point,
   to: Point,
   pace: MousePace,
+  speed = 1,
 ): Promise<Point> {
   const { pxPerMs } = PACE[pace];
   const dx = to.x - from.x;
@@ -59,7 +60,8 @@ export async function moveCursor(
   }
 
   // Longer travels take proportionally longer, clamped to a calm, readable range.
-  const duration = Math.min(1400, Math.max(180, distance / pxPerMs));
+  // The global `speed` multiplier scales the whole travel (faster > 1, slower < 1).
+  const duration = Math.min(1400, Math.max(180, distance / pxPerMs)) / speed;
 
   // Anchor the start position at the move's start time so the idle→move
   // transition is crisp (the compositor holds, then begins moving exactly here).
@@ -80,7 +82,13 @@ export async function moveCursor(
   return to;
 }
 
-/** A short, human pre-click dwell. */
-export async function dwell(min = 120, max = 260): Promise<void> {
-  await sleep(min + Math.random() * (max - min));
+/**
+ * A pre-action dwell of roughly `ms`, with a little humanizing jitter (±15%) so
+ * repeated actions don't tick like a metronome. Callers pass an already
+ * speed-scaled duration. A `ms` of 0 dwells not at all.
+ */
+export async function dwell(ms = 450): Promise<void> {
+  if (ms <= 0) return;
+  const jitter = ms * 0.15;
+  await sleep(ms - jitter + Math.random() * 2 * jitter);
 }
