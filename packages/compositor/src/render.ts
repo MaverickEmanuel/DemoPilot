@@ -6,6 +6,8 @@ import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Timeline } from "./types.js";
 
+export { resolveBundledFfmpeg, type FfmpegLocation } from "./ffmpeg.js";
+
 export interface RenderDemoOptions {
   /** Path to the clean (cursor-less) webm from the player. */
   videoPath: string;

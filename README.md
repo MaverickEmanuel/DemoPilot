@@ -47,9 +47,9 @@ DemoPilot separates the **adaptive** part from the **deterministic** part:
 
 1. **Author** *(AI-assisted)* — the assistant opens your app, reads the accessibility tree, and resolves robust `role` + `name` targets. Each validated action is appended to a working **demo script**.
 2. **Script** *(the artifact)* — a small YAML document, validated by a schema. This is the reproducible deliverable: re-render it any time, no AI in the loop.
-3. **Render** *(deterministic)* — replay the script with human-like pacing, capture a **cursor-less** recording plus a synchronized event **timeline**, then composite the cursor, click ripples, and zoom in [Remotion](https://remotion.dev).
+3. **Render** *(deterministic)* — replay the script with calm, human-like pacing, capture a **cursor-less** recording plus a synchronized event **timeline**, then composite the cursor, click ripples, zoom, captions and a Screen-Studio-style frame in [Remotion](https://remotion.dev).
 
-Because Playwright never paints a cursor, capture is naturally clean — so the cursor is **redrawn in post** and stays fully restylable.
+Because Playwright never paints a cursor, capture is naturally clean — so the cursor is **redrawn in post** and stays fully restylable. Capture uses CDP `Page.startScreencast` for crisp, constant-frame-rate frames (with an automatic fallback to Playwright's `recordVideo`).
 
 ## Quick start
 
@@ -162,7 +162,7 @@ examples/
 
 ## Roadmap
 
-- [ ] Higher-fidelity capture via CDP `Page.startScreencast` (precise framerate)
+- [x] Higher-fidelity capture via CDP `Page.startScreencast` (constant framerate, crisper text)
 - [ ] Voiceover / TTS narration synced to captions
 - [ ] Storyboarded multi-zoom and B-roll transitions
 - [ ] `storageState` recipes for authenticated demos

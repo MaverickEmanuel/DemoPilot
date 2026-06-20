@@ -88,4 +88,50 @@ confirms the logic generalises, not just fits one timing).
 - Modal-close clicks (no navigation/SPA event) still briefly ripple at the click point;
   recording a lightweight "DOM settled" marker would let the compositor react to modal
   open/close the way it now reacts to navigations.
-</content>
+
+---
+
+# Product-walkthrough polish — working notes
+
+Branch `polish-walkthrough` (off the cursor/zoom work). Four workstreams: pacing,
+Screen-Studio framing, capture fidelity, standalone CLI. All verified by re-render +
+frame inspection + timeline metrics; `pnpm typecheck` and `pnpm test` (incl. e2e) green.
+
+## WS1 — Pacing (player + engines)
+New `defaults` knobs (backward compatible): `preActionDwell` (450ms beat after the
+cursor arrives), `postActionHold` (650ms after a click/type), `readPause` 600→900ms now
+applied after **every** navigation (clicks detect client-side nav via `waitForLoadState`
++ url compare), and a global `speed` multiplier that scales all of the above plus mouse
+travel and typing (author `pause`/`waitFor` stay literal). Verified: example 10.6s→17.4s;
+the rushed action gaps 325–383ms → ~1280–1300ms; speed=1.6→11.1s, 0.7→23.9s (proportional).
+Cursor smoothness (0 reversals) and click→cursor sync (0px) unchanged.
+
+## WS2 — Framing (compositor)
+Inset app card on a subtle radial-gradient background, 16px rounded corners, soft shadow
+(`frame.ts`; composition grows by 2·pad). Correctness: the **frame is fixed**; only the
+content inside a fixed rounded clip zooms (a frame that scaled with the 1.13× zoom would
+overflow the padded canvas and collapse the inset). Video + cursor are two groups sharing
+the **same** zoom transform; the cursor group sits outside the rounded clip so its tip is
+never clipped. Verified on stills: at the New Project click the cursor sits exactly on the
+button, ripple centred and unclipped at the corner; typing zoom keeps the cursor on the field.
+
+## WS3 — Capture fidelity (CDP screencast)
+Default capture is now CDP `Page.startScreencast`: JPEG frames (each timestamped) assembled
+into a **constant-fps** H.264 MP4 with Remotion's bundled ffmpeg (`resolveBundledFfmpeg()`,
+no system ffmpeg), padding static stretches by holding the last frame. recordVideo remains
+an automatic fallback (`--legacy-capture` / `DEMOPILOT_CAPTURE=recordVideo`).
+- **Crisper:** realtime VP8 had visible block/mosquito artifacts around text; screencast
+  text edges are clean (3× crops compared). Screencast captures at CSS resolution (= the
+  1× output), so overlay coordinates are unchanged.
+- **Aligned:** CDP frame timestamps mapped onto the timeline wall clock (anchored on the
+  first frame); clean.mp4 is 30fps CFR; click→overlay offset 0px; cursor-on-button confirmed.
+- **No regressions:** replay still ~17s (screencast frame handling didn't slow pacing),
+  cursor smoothness unchanged (0 reversals — cursor is composited from the timeline).
+
+## WS4 — Standalone CLI
+`demopilot render <script.yaml> [--out f.mp4] [--speed n] [--fps n] [--no-zoom|captions|frame]
+[--headed] [--legacy-capture]`. Reuses playDemo+renderDemo+chrome/ffmpeg resolution; renders
+against the script's own baseUrl; prints the MP4 path to stdout (logs to stderr) with a
+`.timeline.json` sidecar. Wired as the `demopilot` bin + `pnpm demopilot` script; paths resolve
+against `INIT_CWD`. Verified end-to-end against the seed app (speed override, --no-frame,
+error handling, full screencast+framing stack).

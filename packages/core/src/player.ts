@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import type { DemoScript, Step } from "./schema.js";
-import { startRecording } from "./capture.js";
+import { startRecording, type CaptureMode, type FfmpegLocation } from "./capture.js";
 import { TimelineRecorder, type Timeline } from "./timeline.js";
 import { moveCursor, dwell, type Point } from "./engines/mouse.js";
 import { typeText } from "./engines/typing.js";
@@ -18,6 +18,12 @@ export interface PlayResult {
 export interface PlayOptions {
   videoDir: string;
   headless?: boolean;
+  /** Capture backend: "recordVideo" (default) or "screencast" (CDP, crisper + CFR). */
+  capture?: CaptureMode;
+  /** Constant frame rate for the screencast backend (default 30). */
+  fps?: number;
+  /** Remotion's bundled ffmpeg, required when capture is "screencast". */
+  ffmpeg?: FfmpegLocation;
 }
 
 /**
@@ -31,6 +37,9 @@ export async function playDemo(script: DemoScript, opts: PlayOptions): Promise<P
     viewport: script.viewport,
     headless: opts.headless,
     storageStatePath: script.storageStatePath,
+    mode: opts.capture,
+    fps: opts.fps,
+    ffmpeg: opts.ffmpeg,
   });
 
   const recorder = new TimelineRecorder(script.viewport.width, script.viewport.height);
@@ -61,8 +70,11 @@ export async function playDemo(script: DemoScript, opts: PlayOptions): Promise<P
     // Always close the session so the video is flushed to disk.
   }
 
-  const videoPath = await session.finish();
-  return { videoPath, timeline: recorder.finish() };
+  // Finalize the timeline first; its duration tells the screencast assembler how
+  // long the clean video should be, and its t=0 anchors the frame alignment.
+  const timeline = recorder.finish();
+  const videoPath = await session.finish({ alignToWall: recorder.startedAt, durationMs: timeline.durationMs });
+  return { videoPath, timeline };
 }
 
 /** Builds a duration scaler from the global speed multiplier (faster > 1, slower < 1). */
