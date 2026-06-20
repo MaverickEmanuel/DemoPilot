@@ -16,6 +16,8 @@ export interface RenderDemoOptions {
   fps?: number;
   zoomOnClick?: boolean;
   captions?: boolean;
+  /** Present the recording as an inset, framed app card (default true). */
+  framed?: boolean;
   onProgress?: (ratio: number) => void;
   /**
    * Path to a Chrome/Chromium executable for Remotion to use. Defaults to
@@ -56,6 +58,7 @@ export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoRes
     fps,
     zoomOnClick: opts.zoomOnClick ?? true,
     captions: opts.captions ?? true,
+    framed: opts.framed ?? true,
   };
 
   const browserExecutable = opts.browserExecutable ?? process.env.DEMOPILOT_CHROME;
