@@ -26,9 +26,12 @@ The engine, with no MCP or React dependencies.
 - **`engines/mouse.ts`, `engines/typing.ts`** — the "feel real" layer: eased
   movement with slight overshoot + pre-click dwell, and per-character typing
   jitter.
-- **`capture.ts`** — launches Chromium with `recordVideo`. Playwright never paints
-  a cursor, so the recording is naturally **clean** and the cursor is composited
-  later.
+- **`capture.ts`** — launches Chromium and records a **clean**, cursor-less video
+  (Playwright never paints a pointer). Two backends: the default **screencast**
+  collects CDP `Page.startScreencast` frames (each timestamped) and assembles them
+  into a constant-fps MP4 with Remotion's bundled ffmpeg — crisper text, uniform
+  timing; **recordVideo** (Playwright's realtime VP8 webm) is the fallback. The
+  pacing/timeline contract is identical either way.
 - **`timeline.ts`** — accumulates cursor samples and discrete events (click, type,
   navigate, narrate) keyed by `t` (ms from recording start). This sidecar is how
   the compositor stays in sync with the video.
@@ -74,13 +77,21 @@ The MCP entry point and orchestration.
 1. **Cursor fidelity** — solved by compositing, at the cost of a Remotion render.
 2. **Reproducibility** — only as stable as the app; mitigated by a11y targeting +
    explicit `waitFor` + recommending seeded/staging environments.
-3. **Video/timeline sync** — currently time-based against `recordVideo`. The
-   planned upgrade is CDP `Page.startScreencast` for precise per-frame timestamps.
+3. **Video/timeline sync** — time-based. The screencast backend aligns CDP frame
+   timestamps to the timeline's `t=0` (anchored on the first frame) and pads static
+   stretches to a constant fps, so overlay/video time stay matched (verified at
+   0px overlay offset on clicks).
 4. **Server rendering** — headed crispness and fonts; base CI/containers on the
    official Playwright image.
 
-## Fidelity upgrade path
+## Capture fidelity
 
-Swap `recordVideo` for CDP `Page.startScreencast` to get exact frame timing and
-framerate control, with ffmpeg constant-fps padding for static screens. The
-timeline contract stays the same, so the compositor is unaffected.
+The default **screencast** backend collects CDP `Page.startScreencast` frames
+(JPEG, each with a metadata timestamp), maps those timestamps onto the timeline's
+wall clock, and assembles them into a constant-fps H.264 MP4 using the ffmpeg that
+Remotion bundles (resolved via `resolveBundledFfmpeg()`; no system ffmpeg). Static
+screens are padded by holding the most recent frame, so timing stays uniform. This
+replaces realtime VP8 encoding, so text is markedly crisper. Screencast captures at
+the CSS viewport resolution (matching the 1× output), so overlay coordinates are
+unchanged. The legacy `recordVideo` path remains as an automatic fallback (and an
+explicit `--legacy-capture` / `DEMOPILOT_CAPTURE=recordVideo` opt-out).

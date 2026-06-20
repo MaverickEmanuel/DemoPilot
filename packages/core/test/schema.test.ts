@@ -11,6 +11,33 @@ describe("DemoScript schema", () => {
     expect(script.viewport).toEqual({ width: 1280, height: 800 });
     expect(script.defaults.typeCadence).toBe("human");
     expect(script.defaults.mousePace).toBe("natural");
+    // Pacing knobs apply their calibrated, unhurried defaults.
+    expect(script.defaults.readPause).toBe(900);
+    expect(script.defaults.preActionDwell).toBe(450);
+    expect(script.defaults.postActionHold).toBe(650);
+    expect(script.defaults.speed).toBe(1);
+  });
+
+  it("accepts custom pacing knobs and a speed multiplier", () => {
+    const script = parseDemoScript({
+      name: "Demo",
+      baseUrl: "http://localhost:4321",
+      defaults: { preActionDwell: 200, postActionHold: 300, readPause: 500, speed: 1.5 },
+      steps: [{ goto: "/" }],
+    });
+    expect(script.defaults.speed).toBe(1.5);
+    expect(script.defaults.preActionDwell).toBe(200);
+  });
+
+  it("rejects a non-positive speed", () => {
+    expect(() =>
+      parseDemoScript({
+        name: "x",
+        baseUrl: "http://localhost",
+        defaults: { speed: 0 },
+        steps: [{ goto: "/" }],
+      }),
+    ).toThrow();
   });
 
   it("rejects a step with no action key", () => {

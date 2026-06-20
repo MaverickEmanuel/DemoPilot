@@ -33,6 +33,9 @@ export interface DemoCompositionProps {
   zoomOnClick: boolean;
   /** Toggle on-screen captions for narrate steps. */
   captions: boolean;
+  /** Present the recording as an inset, rounded "app card" on a background
+   * (Screen-Studio style). When false, the video fills the frame edge-to-edge. */
+  framed: boolean;
   // Remotion requires composition props to be assignable to Record<string, unknown>.
   [key: string]: unknown;
 }
