@@ -18,6 +18,8 @@ describe("DemoScript schema", () => {
     expect(script.defaults.speed).toBe(1);
     // Zoom intensity has a calibrated default and is authorable.
     expect(script.defaults.zoom.level).toBe(1.25);
+    // Button clicks punch in a little deeper than typing by default.
+    expect(script.defaults.zoom.clickBoost).toBe(0.1);
   });
 
   it("accepts an authored zoom level and zoom-region steps", () => {

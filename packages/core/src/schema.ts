@@ -125,6 +125,14 @@ export const DemoDefaultsSchema = z
           .max(2)
           .default(1.25)
           .describe("Zoom magnification for activity zooms (1 = none)"),
+        /** Extra magnification added on top of `level` for button clicks, so
+         * clicks punch in a little deeper and centered on the button. */
+        clickBoost: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.1)
+          .describe("Additional magnification for button clicks, over `level`"),
       })
       .strict()
       .default({}),

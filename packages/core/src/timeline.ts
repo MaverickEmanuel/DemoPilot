@@ -22,6 +22,8 @@ export type TimelineEvent =
 export interface ZoomConfig {
   /** Max magnification for activity zooms (1 = no zoom). */
   level: number;
+  /** Extra magnification added on top of `level` for button clicks. */
+  clickBoost?: number;
 }
 
 export interface Timeline {
