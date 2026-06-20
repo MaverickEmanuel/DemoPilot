@@ -15,7 +15,7 @@
     "studio": "remotion studio src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json --noEmit",
-    "test": "echo \"(compositor has no unit tests)\" && exit 0"
+    "test": "vitest run"
   },
   "dependencies": {
     "@remotion/bundler": "^4.0.250",
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@remotion/cli": "^4.0.250",
-    "@types/react": "^18.3.12"
+    "@types/react": "^18.3.12",
+    "vitest": "^2.1.8"
   }
 }

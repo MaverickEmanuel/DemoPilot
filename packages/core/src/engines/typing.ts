@@ -24,6 +24,11 @@ export async function typeText(
   await locator.click();
   const { base, jitter } = CADENCE[cadence];
 
+  // Capture when typing begins so the timeline records the full [start, end]
+  // span. The compositor uses this so a zoom holds for the whole typing action
+  // (and merges with adjacent fields) instead of a brief blip at completion.
+  const tStart = recorder.nowMs();
+
   if (cadence === "instant") {
     await locator.fill(text);
   } else {
@@ -36,5 +41,5 @@ export async function typeText(
     }
   }
 
-  recorder.type(text);
+  recorder.type(text, tStart);
 }

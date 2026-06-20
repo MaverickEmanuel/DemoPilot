@@ -85,6 +85,13 @@ export const StepSchema = z.union([
     .strict(),
   z.object({ pause: z.number().int().nonnegative().describe("Milliseconds to pause") }).strict(),
   z.object({ narrate: z.string().describe("Caption / narration line for this moment") }).strict(),
+  z
+    .object({
+      zoom: z
+        .enum(["in", "out"])
+        .describe("Authored zoom region: 'in' forces a sustained zoom that holds until 'out'"),
+    })
+    .strict(),
 ]);
 export type Step = z.infer<typeof StepSchema>;
 
@@ -107,6 +114,28 @@ export const DemoDefaultsSchema = z
      * Author-controlled `pause` and `waitFor` steps are left literal (they may be
      * synchronized to app behavior). */
     speed: z.number().positive().default(1),
+    /** Post-production zoom settings (applied by the compositor, not playback). */
+    zoom: z
+      .object({
+        /** Max magnification for activity-driven zooms (1 = no zoom). The zoom
+         * eases toward this level over a sustained group of actions. */
+        level: z
+          .number()
+          .min(1)
+          .max(2)
+          .default(1.25)
+          .describe("Zoom magnification for activity zooms (1 = none)"),
+        /** Extra magnification added on top of `level` for button clicks, so
+         * clicks punch in a little deeper and centered on the button. */
+        clickBoost: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.1)
+          .describe("Additional magnification for button clicks, over `level`"),
+      })
+      .strict()
+      .default({}),
   })
   .strict();
 export type DemoDefaults = z.infer<typeof DemoDefaultsSchema>;
