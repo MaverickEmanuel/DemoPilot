@@ -14,7 +14,10 @@ function easeInOutCubic(p: number): number {
 }
 
 const PACE: Record<MousePace, { pxPerMs: number }> = {
-  natural: { pxPerMs: 1.8 },
+  // Tuned for a calm, deliberate feel: long cross-screen travels glide rather
+  // than dart. Short hops are governed by the duration floor below, so lowering
+  // this only slows the big moves.
+  natural: { pxPerMs: 1.5 },
   fast: { pxPerMs: 3.6 },
   instant: { pxPerMs: Infinity },
 };
