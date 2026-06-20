@@ -15,9 +15,17 @@ defaults:
   # Global pace multiplier: 1 = these defaults, >1 plays faster, <1 slower.
   # Scales every dwell/hold/reading pause and the mouse-travel & typing durations.
   speed: 1.0
+  # Post-production zoom (applied by the compositor). `level` is the max
+  # magnification for activity-driven zooms (1 = no zoom).
+  zoom:
+    level: 1.25
 steps:
   - goto: /
   - narrate: First, create your account
+  # `zoom: in` forces a single sustained zoom that holds through the whole login
+  # (email → password → submit) and releases at `zoom: out`. The automatic
+  # behavior already merges these, but the explicit markers make it deliberate.
+  - zoom: in
   - type:
       target: { role: textbox, name: Email }
       text: demo@acme.com
@@ -26,6 +34,7 @@ steps:
       text: hunter2demo
   - click:
       target: { role: button, name: Create account }
+  - zoom: out
   - waitFor:
       target: { text: Welcome to Acme }
   - narrate: Now let's create your first project

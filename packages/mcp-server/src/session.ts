@@ -118,7 +118,7 @@ export class AuthoringSession {
         await resolveLocator(page, step.waitFor.target).waitFor({ state: step.waitFor.state ?? "visible" });
       }
     }
-    // pause / narrate are no-ops live.
+    // pause / narrate / zoom are no-ops live (zoom is a post-production marker).
   }
 }
 

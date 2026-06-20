@@ -43,9 +43,12 @@ own copy of the timeline types (`types.ts`) so the browser bundler never has to
 resolve the Node-only core package.
 
 - **`Demo.tsx`** — composites `OffthreadVideo` (the clean recording) with a
-  redrawn `Cursor`, click ripples, an optional subtle zoom-toward-cursor, and
+  redrawn `Cursor`, click ripples, an optional activity-driven zoom, and
   optional captions. `interp.ts` interpolates cursor position and computes the
-  ripple/zoom/caption envelopes from the timeline.
+  ripple/zoom/caption envelopes from the timeline. Zoom merges nearby actions
+  (each `type` spans `[tStart, t]`, so a multi-field form holds one sustained
+  zoom) and anchors the focus on the action group's bounding box so it doesn't
+  pan; `defaults.zoom.level` and explicit `zoom: in/out` steps tune it.
 - **`Root.tsx`** — registers the `Demo` composition; `calculateMetadata` derives
   dimensions and duration from the timeline.
 - **`render.ts`** — programmatic render: stages the webm into a temp public dir,
