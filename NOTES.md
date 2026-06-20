@@ -59,4 +59,30 @@ Verified by rendering and inspecting frames at every click/zoom/type moment + nu
    navigation, subtle, origin tracks the smoothed cursor (keeps cursor in-frame) + gentle clamp.
 3. compositor: smoother cursor interpolation; refine ripple; intro/outro cover + fades; caption timing.
 4. Re-render + re-inspect frames + re-check metrics each iteration. Keep typecheck/test green.
+
+## Results (verified by re-render + frame inspection + metrics)
+
+All shipped in commit "Fix cursor smoothness and redesign zoom…". Verified against two
+fresh renders (the random typing cadence shifts event times each run, so this also
+confirms the logic generalises, not just fits one timing).
+
+- **Cursor smoothness:** velocity profiles are clean single-peak bells with no steps —
+  big cross-screen move `▁▁▂▄▆██▆▄▂▁`, small move `▁▃▄█▂▁`. x-direction reversals
+  3 → **0**. Click→cursor offset stays **0px** (spline passes through samples).
+- **Zoom:** now eases *out* to reveal the dashboard on the form-submit navigation
+  (was: zoomed into empty space); "New Project" is framed on-screen with the cursor on
+  it (was: shoved to the off-screen corner by a stale, non-retargeting zoom); the form
+  gets a calm focus zoom while typing; the modal interaction is centred and followed.
+- **Overlays:** ripple suppressed on navigating clicks (no float on the next page);
+  captions fade and hand off at the next narration; intro white flash replaced by a
+  seamless dark reveal; gentle outro fade.
+- **Sync:** unchanged and within tolerance (overlay-vs-element offset 0px at clicks).
+- **Green:** `pnpm typecheck` and `pnpm test` (incl. the real-browser e2e) both pass.
+
+### Possible future tuning (not blocking the quality bar)
+- Cross-screen pointer travel is ~400ms; could be made slightly more deliberate by
+  lowering `natural` `pxPerMs` if an even calmer feel is wanted.
+- Modal-close clicks (no navigation/SPA event) still briefly ripple at the click point;
+  recording a lightweight "DOM settled" marker would let the compositor react to modal
+  open/close the way it now reacts to navigations.
 </content>
