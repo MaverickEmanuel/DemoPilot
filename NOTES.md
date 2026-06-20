@@ -79,9 +79,12 @@ confirms the logic generalises, not just fits one timing).
 - **Sync:** unchanged and within tolerance (overlay-vs-element offset 0px at clicks).
 - **Green:** `pnpm typecheck` and `pnpm test` (incl. the real-browser e2e) both pass.
 
+### Tuning applied
+- `natural` pace lowered 1.8 → 1.5 px/ms so long cross-screen travels glide (peak
+  4.6 → 4.1 px/ms, ~410 → ~490ms for the 735px move). Short hops are unaffected (they
+  hit the duration floor), so only the big moves got calmer.
+
 ### Possible future tuning (not blocking the quality bar)
-- Cross-screen pointer travel is ~400ms; could be made slightly more deliberate by
-  lowering `natural` `pxPerMs` if an even calmer feel is wanted.
 - Modal-close clicks (no navigation/SPA event) still briefly ripple at the click point;
   recording a lightweight "DOM settled" marker would let the compositor react to modal
   open/close the way it now reacts to navigations.
