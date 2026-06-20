@@ -13,9 +13,16 @@ export interface CursorSample {
 export type TimelineEvent =
   | { kind: "navigate"; t: number; url: string }
   | { kind: "click"; t: number; x: number; y: number; button: "left" | "right" | "middle" }
-  | { kind: "type"; t: number; text: string }
+  | { kind: "type"; t: number; tStart: number; text: string }
   | { kind: "scroll"; t: number; x: number; y: number }
-  | { kind: "narrate"; t: number; text: string };
+  | { kind: "narrate"; t: number; text: string }
+  | { kind: "zoom"; t: number; action: "in" | "out" };
+
+/** Post-production zoom settings carried alongside the capture. */
+export interface ZoomConfig {
+  /** Max magnification for activity zooms (1 = no zoom). */
+  level: number;
+}
 
 export interface Timeline {
   version: 1;
@@ -24,6 +31,8 @@ export interface Timeline {
   durationMs: number;
   cursor: CursorSample[];
   events: TimelineEvent[];
+  /** Optional zoom configuration resolved from the script's defaults. */
+  zoom?: ZoomConfig;
 }
 
 /**
@@ -52,6 +61,12 @@ export class TimelineRecorder {
 
   private t(): number {
     return Math.max(0, this.now() - this.start);
+  }
+
+  /** The current timeline time in ms. Used to capture an action's start before
+   * a long operation (e.g. typing) whose event is only recorded on completion. */
+  nowMs(): number {
+    return this.t();
   }
 
   sampleCursor(x: number, y: number): void {
@@ -84,8 +99,11 @@ export class TimelineRecorder {
     this.events.push({ kind: "click", t: this.t(), x, y, button });
   }
 
-  type(text: string): void {
-    this.events.push({ kind: "type", t: this.t(), text });
+  /** Records a `type` event spanning [tStart, now]. When `tStart` is omitted it
+   * collapses to a point at the current time (keeps the event well-formed). */
+  type(text: string, tStart?: number): void {
+    const t = this.t();
+    this.events.push({ kind: "type", t, tStart: tStart ?? t, text });
   }
 
   scroll(): void {
@@ -94,6 +112,11 @@ export class TimelineRecorder {
 
   narrate(text: string): void {
     this.events.push({ kind: "narrate", t: this.t(), text });
+  }
+
+  /** An authored zoom-region marker ("in" opens a region, "out" closes it). */
+  zoom(action: "in" | "out"): void {
+    this.events.push({ kind: "zoom", t: this.t(), action });
   }
 
   finish(): Timeline {

@@ -109,13 +109,18 @@ export function clickPulseAt(timeline: Timeline, tMs: number): ClickPulse | null
 // ----------------------------------------------------------------------------
 // Zoom — a calm, activity-driven focus envelope.
 //
-// Clicks and typing are "points of action". Each contributes a window; nearby
-// windows merge into one sustained zoom so the view doesn't pump in and out
-// between rapid steps. Navigations cut the envelope, so a zoom started on one
-// page eases out as the page transitions instead of lingering over the next one.
-// The origin tracks a time-smoothed cursor position, so the zoom focuses on
-// whatever the cursor is doing (a field while typing, a button at a click) and
-// keeps the cursor itself comfortably inside the frame.
+// Clicks and typing are "actions", each spanning a time range: a click is an
+// instant, but typing runs from when it begins (`tStart`) to when it finishes
+// (`t`), so the zoom holds for the whole field rather than blipping at the end.
+// Nearby ranges merge into one sustained zoom, so a multi-field form (e.g. a
+// login) reads as a single hold instead of pumping in and out between fields.
+// Navigations cut the envelope, so a zoom started on one page eases out as the
+// page transitions instead of lingering over the next one.
+//
+// The origin is *anchored* to the bounding-box center of the group's actions,
+// so the view stays composed on the form (the cursor moving between fields and
+// the submit button doesn't make it pan). Authors can also force a region with
+// `zoom: in` / `zoom: out` steps, which add their own interval to the mix.
 // ----------------------------------------------------------------------------
 
 export interface ZoomState {
@@ -124,78 +129,134 @@ export interface ZoomState {
   originY: number;
 }
 
-const ZOOM_MAX = 1.13;
+const ZOOM_MAX = 1.25; // default magnification; overridden by timeline.zoom.level
 const LEAD_MS = 450; // anticipate: begin easing in before the action
-const TAIL_MS = 650; // linger briefly after the action
+const TAIL_MS = 900; // linger after the last action so it stays readable
 const EASE_IN_MS = 460;
 const EASE_OUT_MS = 620;
-const MERGE_GAP_MS = 2600; // actions closer than this share one sustained zoom
-const ORIGIN_SMOOTH_MS = 320;
+const MERGE_GAP_MS = 3200; // actions whose gap is under this share one sustained zoom
+const SAFE_X = 0.12; // keep the focus point off the extreme horizontal edges
+const SAFE_Y = 0.14;
+
+/** A discrete action with a time span and a focus point (in video px). */
+interface Action {
+  start: number;
+  end: number;
+  x: number;
+  y: number;
+}
 
 interface Interval {
   start: number;
   end: number;
+  anchor: Vec;
 }
 
-function zoomIntervals(timeline: Timeline): Interval[] {
-  const markers: number[] = [];
-  for (const e of timeline.events) if (e.kind === "click" || e.kind === "type") markers.push(e.t);
-  markers.sort((a, b) => a - b);
-  if (markers.length === 0) return [];
-
-  const navs: number[] = timeline.events.filter((e) => e.kind === "navigate").map((e) => e.t);
-  const navBetween = (a: number, b: number) => navs.some((tn) => tn > a && tn < b);
-
-  // Group consecutive actions, breaking the group across a navigation.
-  const groups: number[][] = [[markers[0]]];
-  for (let i = 1; i < markers.length; i++) {
-    const prev = markers[i - 1];
-    const cur = markers[i];
-    if (cur - prev < MERGE_GAP_MS && !navBetween(prev, cur)) groups[groups.length - 1].push(cur);
-    else groups.push([cur]);
+/** Clicks (instant) and typing (a [tStart, t] span), each with a focus point. */
+function actions(timeline: Timeline): Action[] {
+  const out: Action[] = [];
+  for (const e of timeline.events) {
+    if (e.kind === "click") {
+      out.push({ start: e.t, end: e.t, x: e.x, y: e.y });
+    } else if (e.kind === "type") {
+      // `type` events carry no coordinates; the player parks the cursor on the
+      // field center before typing, so the cursor position there is the field.
+      const p = cursorAt(timeline.cursor, e.tStart);
+      out.push({ start: e.tStart, end: e.t, x: p.x, y: p.y });
+    }
   }
-
-  return groups.map((g) => {
-    const first = g[0];
-    const last = g[g.length - 1];
-    let start = first - LEAD_MS;
-    let end = last + TAIL_MS;
-    // Don't anticipate earlier than the page we're acting on appeared.
-    const navBefore = Math.max(-Infinity, ...navs.filter((tn) => tn <= first));
-    if (Number.isFinite(navBefore)) start = Math.max(start, navBefore);
-    // End the zoom when the page changes right after the action (smooth handoff
-    // to the next page instead of a stale zoom lingering over it).
-    const navAfter = Math.min(Infinity, ...navs.filter((tn) => tn >= last));
-    if (Number.isFinite(navAfter)) end = Math.min(end, navAfter);
-    return { start, end };
-  });
+  out.sort((a, b) => a.start - b.start);
+  return out;
 }
 
-/** Time-smoothed cursor position, clamped to a safe inset, for the zoom origin. */
-function focusOrigin(timeline: Timeline, tMs: number): Vec {
-  const offsets = [-ORIGIN_SMOOTH_MS, -ORIGIN_SMOOTH_MS / 2, 0, ORIGIN_SMOOTH_MS / 2, ORIGIN_SMOOTH_MS];
-  const weights = [0.5, 0.85, 1, 0.85, 0.5];
-  let sx = 0;
-  let sy = 0;
-  let sw = 0;
-  for (let i = 0; i < offsets.length; i++) {
-    const p = cursorAt(timeline.cursor, tMs + offsets[i]);
-    sx += p.x * weights[i];
-    sy += p.y * weights[i];
-    sw += weights[i];
+/** Bounding-box center of the given actions, clamped to a safe inset. */
+function anchorOf(acts: Action[], timeline: Timeline): Vec {
+  if (acts.length === 0) return { x: timeline.width / 2, y: timeline.height / 2 };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const a of acts) {
+    minX = Math.min(minX, a.x);
+    maxX = Math.max(maxX, a.x);
+    minY = Math.min(minY, a.y);
+    maxY = Math.max(maxY, a.y);
   }
-  const x = sx / sw;
-  const y = sy / sw;
   return {
-    x: clamp(x, timeline.width * 0.12, timeline.width * 0.88),
-    y: clamp(y, timeline.height * 0.14, timeline.height * 0.86),
+    x: clamp((minX + maxX) / 2, timeline.width * SAFE_X, timeline.width * (1 - SAFE_X)),
+    y: clamp((minY + maxY) / 2, timeline.height * SAFE_Y, timeline.height * (1 - SAFE_Y)),
   };
 }
 
-/** Subtle, smooth zoom envelope focused on the current point of action. */
+function zoomIntervals(timeline: Timeline): Interval[] {
+  const navs: number[] = timeline.events.filter((e) => e.kind === "navigate").map((e) => e.t);
+  const navBetween = (a: number, b: number) => navs.some((tn) => tn > a && tn < b);
+  const acts = actions(timeline);
+  const intervals: Interval[] = [];
+
+  // --- Automatic: merge nearby action ranges into sustained zooms. ---
+  if (acts.length > 0) {
+    let group: Action[] = [acts[0]];
+    const flush = () => {
+      const first = group[0];
+      const last = group.reduce((m, a) => (a.end > m.end ? a : m), group[0]);
+      let start = first.start - LEAD_MS;
+      let end = last.end + TAIL_MS;
+      // Don't anticipate before the acted-on page appeared, and end the zoom
+      // when the page changes right after, for a smooth handoff.
+      const navBefore = Math.max(-Infinity, ...navs.filter((tn) => tn <= first.start));
+      if (Number.isFinite(navBefore)) start = Math.max(start, navBefore);
+      const navAfter = Math.min(Infinity, ...navs.filter((tn) => tn >= last.end));
+      if (Number.isFinite(navAfter)) end = Math.min(end, navAfter);
+      intervals.push({ start, end, anchor: anchorOf(group, timeline) });
+    };
+    for (let i = 1; i < acts.length; i++) {
+      const prev = group[group.length - 1];
+      const cur = acts[i];
+      // Gap is measured edge-to-edge so a long typing run still merges with the
+      // next field even though its completion timestamp is far from the start.
+      if (cur.start - prev.end < MERGE_GAP_MS && !navBetween(prev.end, cur.start)) {
+        group.push(cur);
+      } else {
+        flush();
+        group = [cur];
+      }
+    }
+    flush();
+  }
+
+  // --- Explicit: authored `zoom: in` / `zoom: out` regions. ---
+  const markers = timeline.events.filter(
+    (e): e is Extract<typeof e, { kind: "zoom" }> => e.kind === "zoom",
+  );
+  let openAt: number | null = null;
+  for (const m of markers) {
+    if (m.action === "in") {
+      if (openAt === null) openAt = m.t;
+    } else if (openAt !== null) {
+      intervals.push(explicitInterval(openAt, m.t, acts, timeline));
+      openAt = null;
+    }
+  }
+  if (openAt !== null) {
+    // An unmatched `in` holds to the end of the recording.
+    intervals.push(explicitInterval(openAt, timeline.durationMs, acts, timeline));
+  }
+
+  return intervals;
+}
+
+function explicitInterval(start: number, end: number, acts: Action[], timeline: Timeline): Interval {
+  const inside = acts.filter((a) => a.start >= start && a.start <= end);
+  return { start, end, anchor: anchorOf(inside, timeline) };
+}
+
+/** Smooth zoom envelope anchored on the active group's region. */
 export function zoomAt(timeline: Timeline, tMs: number): ZoomState {
   const intervals = zoomIntervals(timeline);
+  const max = timeline.zoom?.level ?? ZOOM_MAX;
   let k = 0;
+  let anchor: Vec | null = null;
   for (const iv of intervals) {
     if (tMs < iv.start || tMs > iv.end) continue;
     const span = iv.end - iv.start;
@@ -203,14 +264,19 @@ export function zoomAt(timeline: Timeline, tMs: number): ZoomState {
     const easeOut = Math.min(EASE_OUT_MS, span * 0.5);
     const up = smoothstep(iv.start, iv.start + easeIn, tMs);
     const down = smoothstep(iv.end, iv.end - easeOut, tMs);
-    k = Math.max(k, Math.min(up, down));
+    const kv = Math.min(up, down);
+    // The strongest active interval owns the focus point, so overlapping
+    // automatic + authored zooms resolve to one steady anchor.
+    if (kv > k) {
+      k = kv;
+      anchor = iv.anchor;
+    }
   }
 
-  if (k <= 0) {
+  if (k <= 0 || !anchor) {
     return { scale: 1, originX: timeline.width / 2, originY: timeline.height / 2 };
   }
-  const origin = focusOrigin(timeline, tMs);
-  return { scale: 1 + (ZOOM_MAX - 1) * k, originX: origin.x, originY: origin.y };
+  return { scale: 1 + (max - 1) * k, originX: anchor.x, originY: anchor.y };
 }
 
 // ----------------------------------------------------------------------------

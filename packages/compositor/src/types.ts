@@ -12,9 +12,15 @@ export interface CursorSample {
 export type TimelineEvent =
   | { kind: "navigate"; t: number; url: string }
   | { kind: "click"; t: number; x: number; y: number; button: "left" | "right" | "middle" }
-  | { kind: "type"; t: number; text: string }
+  | { kind: "type"; t: number; tStart: number; text: string }
   | { kind: "scroll"; t: number; x: number; y: number }
-  | { kind: "narrate"; t: number; text: string };
+  | { kind: "narrate"; t: number; text: string }
+  | { kind: "zoom"; t: number; action: "in" | "out" };
+
+export interface ZoomConfig {
+  /** Max magnification for activity zooms (1 = no zoom). */
+  level: number;
+}
 
 export interface Timeline {
   version: 1;
@@ -23,6 +29,7 @@ export interface Timeline {
   durationMs: number;
   cursor: CursorSample[];
   events: TimelineEvent[];
+  zoom?: ZoomConfig;
 }
 
 export interface DemoCompositionProps {

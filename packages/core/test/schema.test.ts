@@ -16,6 +16,30 @@ describe("DemoScript schema", () => {
     expect(script.defaults.preActionDwell).toBe(450);
     expect(script.defaults.postActionHold).toBe(650);
     expect(script.defaults.speed).toBe(1);
+    // Zoom intensity has a calibrated default and is authorable.
+    expect(script.defaults.zoom.level).toBe(1.25);
+  });
+
+  it("accepts an authored zoom level and zoom-region steps", () => {
+    const script = parseDemoScript({
+      name: "Demo",
+      baseUrl: "http://localhost:4321",
+      defaults: { zoom: { level: 1.4 } },
+      steps: [{ zoom: "in" }, { goto: "/" }, { zoom: "out" }],
+    });
+    expect(script.defaults.zoom.level).toBe(1.4);
+    expect(script.steps).toHaveLength(3);
+  });
+
+  it("rejects a zoom level above the allowed range", () => {
+    expect(() =>
+      parseDemoScript({
+        name: "x",
+        baseUrl: "http://localhost",
+        defaults: { zoom: { level: 3 } },
+        steps: [{ goto: "/" }],
+      }),
+    ).toThrow();
   });
 
   it("accepts custom pacing knobs and a speed multiplier", () => {
@@ -79,5 +103,29 @@ describe("TimelineRecorder", () => {
     expect(tl.cursor[0]).toMatchObject({ t: 0, x: 10, y: 10 });
     expect(tl.events.map((e) => e.kind)).toEqual(["navigate", "click", "type"]);
     expect(tl.durationMs).toBe(300);
+  });
+
+  it("records a type event spanning [tStart, t]", () => {
+    let now = 1000;
+    const rec = new TimelineRecorder(1280, 800, () => now);
+    const start = 1000;
+    now = 1500;
+    rec.type("hello world", start - rec.startedAt);
+    const tl = rec.finish();
+    const type = tl.events.find((e) => e.kind === "type");
+    expect(type).toMatchObject({ kind: "type", tStart: 0, t: 500, text: "hello world" });
+  });
+
+  it("records authored zoom-region markers", () => {
+    let now = 1000;
+    const rec = new TimelineRecorder(1280, 800, () => now);
+    rec.zoom("in");
+    now = 1400;
+    rec.zoom("out");
+    const tl = rec.finish();
+    expect(tl.events).toEqual([
+      { kind: "zoom", t: 0, action: "in" },
+      { kind: "zoom", t: 400, action: "out" },
+    ]);
   });
 });
