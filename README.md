@@ -64,6 +64,37 @@ pnpm render:example
 # → renders/first-demo.mp4
 ```
 
+### Render from the command line
+
+DemoPilot ships a standalone `demopilot` CLI, so you can render any script to MP4
+without an MCP client. It replays the script against **its own `baseUrl`** — serve
+your app there first.
+
+```bash
+# Serve the bundled seed app on http://localhost:4321 (its example's baseUrl):
+pnpm seed-app            # in one terminal
+
+# Render the example (in another terminal):
+pnpm demopilot render examples/scripts/first-demo.yaml
+# → renders/first-demo.mp4
+
+# Options: pick the output, speed it up, drop overlays:
+pnpm demopilot render demo.yaml --out out/demo.mp4 --speed 1.25 --no-captions
+```
+
+| Flag | Effect |
+| --- | --- |
+| `-o, --out <file.mp4>` | Output path (default `renders/<script-name>.mp4`). |
+| `-s, --speed <n>` | Global pace multiplier — `>1` faster, `<1` slower. |
+| `--fps <n>` | Output frame rate (default 30). |
+| `--no-zoom` / `--no-captions` / `--no-frame` | Drop the zoom, captions, or the framed presentation. |
+| `--headed` | Run the capture browser headed (default headless). |
+
+The MP4 path is printed to **stdout** (logs go to stderr), so it composes in scripts:
+`OUT=$(pnpm demopilot render demo.yaml)`. A `.timeline.json` sidecar is written next to
+the output. Outside this repo — once the package is installed — the same command is just
+`demopilot render demo.yaml`.
+
 ### Use it as an MCP server
 
 Add DemoPilot to any MCP-capable client (Claude Desktop, etc.):
