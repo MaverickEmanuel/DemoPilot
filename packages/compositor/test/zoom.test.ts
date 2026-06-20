@@ -36,20 +36,34 @@ describe("zoomAt", () => {
     expect(zoomAt(tl, 7800).scale).toBeCloseTo(1.0, 2);
   });
 
-  it("anchors the origin steady (no panning) for the whole group", () => {
+  it("keeps typing anchored on the form, then recenters and punches on a click", () => {
     const tl = timeline([
       { kind: "type", tStart: 1000, t: 3000, text: "demo@acme.com" },
       { kind: "click", t: 4000, x: 600, y: 500, button: "left" },
     ]);
-    const a = zoomAt(tl, 2000);
-    const b = zoomAt(tl, 3800);
-    expect(a.originX).toBeCloseTo(b.originX, 5);
-    expect(a.originY).toBeCloseTo(b.originY, 5);
+    // During typing the focus sits on the field and holds the base level.
+    const typing = zoomAt(tl, 2000);
+    expect(typing.originX).toBeCloseTo(400, 0);
+    expect(typing.originY).toBeCloseTo(300, 0);
+    expect(typing.scale).toBeCloseTo(1.25, 2);
+    // At the click the focus moves onto the button and punches in deeper.
+    const click = zoomAt(tl, 4000);
+    expect(click.originX).toBeGreaterThan(typing.originX + 50);
+    expect(click.scale).toBeGreaterThan(1.3);
   });
 
-  it("honors the timeline zoom level override", () => {
-    const tl = { ...timeline([{ kind: "click", t: 2000, x: 400, y: 300, button: "left" }]), zoom: { level: 1.5 } };
+  it("honors the timeline zoom level and clickBoost overrides", () => {
+    const tl = {
+      ...timeline([
+        { kind: "type", tStart: 1000, t: 3000, text: "x" },
+        { kind: "click", t: 5000, x: 400, y: 300, button: "left" },
+      ]),
+      zoom: { level: 1.5, clickBoost: 0.2 },
+    };
+    // Typing holds the base level; the click punches to base + clickBoost
+    // (sampled at the punch's peak, which sits just before the press).
     expect(zoomAt(tl, 2000).scale).toBeCloseTo(1.5, 2);
+    expect(zoomAt(tl, 4940).scale).toBeCloseTo(1.7, 2);
   });
 
   it("produces a zoom from an explicit in/out region", () => {

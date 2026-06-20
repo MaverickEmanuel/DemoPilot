@@ -150,11 +150,14 @@ steps:
 
 Step kinds: `goto · click · type · press · hover · scroll · waitFor · select · pause · narrate · zoom`.
 
-The compositor zooms automatically toward whatever's being acted on — typing and
-clicks in quick succession (like a login) merge into **one** sustained, steady
-zoom rather than several short ones. `defaults.zoom.level` sets the magnification
-(default `1.25`, `1` disables), and the optional `zoom: in` / `zoom: out` steps
-let you force a region explicitly.
+The compositor zooms automatically toward whatever's being acted on. A run of
+nearby fields (like a login) holds **one** sustained, steady zoom anchored on the
+form, while each important button click gets its own slightly deeper zoom
+centered on the button. `defaults.zoom.level` sets the base magnification
+(default `1.25`, `1` disables) and `defaults.zoom.clickBoost` how much deeper
+clicks punch in (default `0.1`); the optional `zoom: in` / `zoom: out` steps let
+you force a region explicitly. The cursor itself travels at a calm, deliberate
+pace (tune per demo with `defaults.mousePace` or the global `speed`).
 
 ## Project layout
 

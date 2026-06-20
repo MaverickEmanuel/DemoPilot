@@ -75,7 +75,7 @@ export async function playDemo(script: DemoScript, opts: PlayOptions): Promise<P
   const timeline = recorder.finish();
   // Carry the resolved zoom config to the compositor (and the sidecar
   // timeline.json) so the render's zoom intensity is authorable per demo.
-  timeline.zoom = { level: script.defaults.zoom.level };
+  timeline.zoom = { level: script.defaults.zoom.level, clickBoost: script.defaults.zoom.clickBoost };
   const videoPath = await session.finish({ alignToWall: recorder.startedAt, durationMs: timeline.durationMs });
   return { videoPath, timeline };
 }
