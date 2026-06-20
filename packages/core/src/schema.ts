@@ -92,8 +92,21 @@ export const DemoDefaultsSchema = z
   .object({
     typeCadence: TypeCadence.default("human"),
     mousePace: MousePace.default("natural"),
-    /** Extra reading pause (ms) added after each navigation. */
-    readPause: z.number().int().nonnegative().default(600),
+    /** Reading pause (ms) after each navigation — explicit `goto` *and* client-side
+     * (form submit / SPA route change) — before the next step runs. */
+    readPause: z.number().int().nonnegative().default(900),
+    /** Pause (ms) after the cursor arrives on a target, before the click/type fires.
+     * Reads as the cursor "taking aim", so actions don't feel instantaneous. */
+    preActionDwell: z.number().int().nonnegative().default(450),
+    /** Hold (ms) after a click or type completes so the result is readable before
+     * the demo moves on. */
+    postActionHold: z.number().int().nonnegative().default(650),
+    /** Global pace multiplier (> 0). 1 = the calibrated default pace; values above 1
+     * play faster (durations shrink), below 1 play slower (durations stretch). Scales
+     * the dwell/hold/reading pauses, lead-in/tail, and mouse-travel & typing durations.
+     * Author-controlled `pause` and `waitFor` steps are left literal (they may be
+     * synchronized to app behavior). */
+    speed: z.number().positive().default(1),
   })
   .strict();
 export type DemoDefaults = z.infer<typeof DemoDefaultsSchema>;
