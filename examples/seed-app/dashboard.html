@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acme — Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="app">
+    <nav class="sidebar">
+      <div class="brand">▲ Acme</div>
+      <a class="nav-item active" href="#">Projects</a>
+      <a class="nav-item" href="#">Templates</a>
+      <a class="nav-item" href="#">Settings</a>
+    </nav>
+
+    <section class="content" data-page="dashboard">
+      <header class="topbar">
+        <h1>Welcome to Acme</h1>
+        <button id="new-project" type="button">New Project</button>
+      </header>
+
+      <div id="empty-state" class="empty">
+        <p class="muted">No projects yet. Create your first one to get started.</p>
+      </div>
+
+      <ul id="project-list" class="project-list" hidden></ul>
+    </section>
+
+    <dialog id="new-project-dialog">
+      <form method="dialog" id="project-form">
+        <h2>New project</h2>
+        <label>
+          Project name
+          <input id="project-name" name="project-name" type="text" placeholder="Marketing site" />
+        </label>
+        <menu>
+          <button value="cancel" id="cancel-project">Cancel</button>
+          <button value="confirm" id="create-project" class="primary">Create</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script>
+      const dialog = document.getElementById("new-project-dialog");
+      const list = document.getElementById("project-list");
+      const empty = document.getElementById("empty-state");
+
+      document.getElementById("new-project").addEventListener("click", () => dialog.showModal());
+
+      document.getElementById("project-form").addEventListener("submit", (e) => {
+        const name = document.getElementById("project-name").value.trim();
+        if (e.submitter && e.submitter.value === "confirm" && name) {
+          const li = document.createElement("li");
+          li.textContent = name;
+          list.appendChild(li);
+          list.hidden = false;
+          empty.hidden = true;
+        }
+      });
+    </script>
+  </body>
+</html>

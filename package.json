@@ -1,0 +1,29 @@
+{
+  "name": "demopilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server that turns natural-language prompts into reproducible product demo videos (MP4).",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "mcp": "pnpm --filter @demopilot/mcp-server start",
+    "seed-app": "pnpm --filter @demopilot/examples serve",
+    "render:example": "pnpm --filter @demopilot/mcp-server render:example"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
