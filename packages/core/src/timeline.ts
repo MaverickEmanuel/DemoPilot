@@ -58,7 +58,19 @@ export class TimelineRecorder {
   }
 
   navigate(url: string): void {
-    this.events.push({ kind: "navigate", t: this.t(), url });
+    // The player records explicit `goto` steps and also auto-records client-side
+    // navigations (form submits, SPA transitions) via a framenavigated listener.
+    // Ignore the blank startup page and collapse duplicate reports of the same
+    // URL that arrive close together (e.g. commit + load for one navigation).
+    if (!url || url === "about:blank") return;
+    const t = this.t();
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const e = this.events[i];
+      if (e.kind !== "navigate") continue;
+      if (e.url === url && t - e.t < 1200) return;
+      break;
+    }
+    this.events.push({ kind: "navigate", t, url });
   }
 
   click(x: number, y: number, button: "left" | "right" | "middle" = "left"): void {

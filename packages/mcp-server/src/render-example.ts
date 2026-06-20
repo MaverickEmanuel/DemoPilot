@@ -5,7 +5,7 @@
  *   pnpm render:example
  */
 import { createServer, type Server } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, normalize } from "node:path";
 import { loadDemoScript, playDemo } from "@demopilot/core";
@@ -53,6 +53,12 @@ async function main(): Promise<void> {
       videoDir: join(repoRoot, "renders/.capture"),
       headless: true,
     });
+
+    // Persist the intermediate artifacts so capture problems can be separated
+    // from compositing problems (analyze timeline.json; inspect the clean webm).
+    const timelinePath = join(repoRoot, "renders/timeline.json");
+    await writeFile(timelinePath, JSON.stringify(timeline, null, 2));
+    console.log(`[render:example] timeline → ${timelinePath} (clean webm → ${videoPath})`);
 
     console.log("[render:example] compositing MP4…");
     const result = await renderDemo({
