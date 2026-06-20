@@ -1,0 +1,25 @@
+{
+  "name": "@demopilot/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "demopilot-mcp": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "render:example": "tsx src/render-example.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"(mcp-server has no unit tests)\" && exit 0"
+  },
+  "dependencies": {
+    "@demopilot/compositor": "workspace:*",
+    "@demopilot/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "playwright": "1.56.0",
+    "yaml": "^2.6.1",
+    "zod": "^3.24.1"
+  }
+}

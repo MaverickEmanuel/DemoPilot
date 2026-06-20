@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acme — Sign up</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="card" data-page="signup">
+      <div class="brand">▲ Acme</div>
+      <h1>Create your account</h1>
+      <p class="muted">Start your free trial. No credit card required.</p>
+
+      <form id="signup-form" novalidate>
+        <label>
+          Email
+          <input id="email" name="email" type="email" autocomplete="off" placeholder="you@company.com" />
+        </label>
+        <label>
+          Password
+          <input id="password" name="password" type="password" autocomplete="off" placeholder="••••••••" />
+        </label>
+        <button id="create-account" type="submit">Create account</button>
+      </form>
+    </main>
+
+    <script>
+      // Trivial client-side "auth": just route to the dashboard with the email.
+      const form = document.getElementById("signup-form");
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const email = document.getElementById("email").value || "demo@acme.com";
+        location.href = "/dashboard.html?email=" + encodeURIComponent(email);
+      });
+    </script>
+  </body>
+</html>

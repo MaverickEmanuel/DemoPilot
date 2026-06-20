@@ -1,0 +1,34 @@
+name: Sign up and create your first project
+description: Walks through account creation and creating a first project in the Acme seed app.
+baseUrl: http://localhost:4321
+viewport:
+  width: 1280
+  height: 800
+defaults:
+  typeCadence: human
+  mousePace: natural
+  readPause: 600
+steps:
+  - goto: /
+  - narrate: First, create your account
+  - type:
+      target: { role: textbox, name: Email }
+      text: demo@acme.com
+  - type:
+      target: { role: textbox, name: Password }
+      text: hunter2demo
+  - click:
+      target: { role: button, name: Create account }
+  - waitFor:
+      target: { text: Welcome to Acme }
+  - narrate: Now let's create your first project
+  - click:
+      target: { role: button, name: New Project }
+  - type:
+      target: { role: textbox, name: Project name }
+      text: Marketing site
+  - click:
+      target: { role: button, name: Create }
+  - waitFor:
+      target: { text: Marketing site }
+  - pause: 800
