@@ -14,7 +14,7 @@ import { writeFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { loadDemoScript, playDemo } from "@demopilot/core";
-import { renderDemo } from "@demopilot/compositor";
+import { renderDemo, resolveBundledFfmpeg } from "@demopilot/compositor";
 import { resolveChromeForRemotion } from "./chrome.js";
 
 interface RenderArgs {
@@ -26,6 +26,7 @@ interface RenderArgs {
   captions: boolean;
   framed: boolean;
   headless: boolean;
+  legacyCapture: boolean;
 }
 
 const USAGE = `DemoPilot — render a demo script to MP4.
@@ -41,6 +42,8 @@ Options:
       --no-captions      Disable narration captions
       --no-frame         Disable the framed app-card presentation (full-bleed)
       --headed           Run the capture browser headed (default: headless)
+      --legacy-capture   Use the realtime recordVideo backend instead of the
+                         crisper, constant-fps CDP screencast capture
   -h, --help             Show this help
 
 The script renders against its own baseUrl. Serve your app there first; the
@@ -70,6 +73,7 @@ function parseRenderArgs(argv: string[]): RenderArgs {
     captions: true,
     framed: true,
     headless: true,
+    legacyCapture: false,
   };
   const num = (label: string, v: string | undefined): number => {
     const n = Number(v);
@@ -103,6 +107,9 @@ function parseRenderArgs(argv: string[]): RenderArgs {
       case "--headed":
         args.headless = false;
         break;
+      case "--legacy-capture":
+        args.legacyCapture = true;
+        break;
       default:
         if (t.startsWith("-")) throw new Error(`Unknown option: ${t}`);
         if (args.scriptPath) throw new Error(`Unexpected extra argument: ${t}`);
@@ -130,8 +137,20 @@ async function cmdRender(argv: string[]): Promise<void> {
 
   const captureDir = await mkdtemp(join(tmpdir(), "demopilot-cli-"));
 
-  console.error(`▶ Replaying ${args.scriptPath} against ${script.baseUrl} (speed ${script.defaults.speed})…`);
-  const { videoPath, timeline } = await playDemo(script, { videoDir: captureDir, headless: args.headless });
+  // Prefer the crisper, constant-fps CDP screencast capture; fall back to the
+  // realtime recordVideo backend on request or if ffmpeg can't be located.
+  const ffmpeg = args.legacyCapture ? null : resolveBundledFfmpeg();
+  const captureMode = ffmpeg ? "screencast" : "recordVideo";
+
+  console.error(
+    `▶ Replaying ${args.scriptPath} against ${script.baseUrl} (speed ${script.defaults.speed}, ${captureMode})…`,
+  );
+  const { videoPath, timeline } = await playDemo(script, {
+    videoDir: captureDir,
+    headless: args.headless,
+    capture: captureMode,
+    ffmpeg: ffmpeg ?? undefined,
+  });
   await writeFile(timelinePath, JSON.stringify(timeline, null, 2), "utf8");
 
   console.error(`▶ Compositing MP4…`);
