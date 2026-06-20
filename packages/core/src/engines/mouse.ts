@@ -13,13 +13,16 @@ function easeInOutCubic(p: number): number {
   return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
 }
 
-const PACE: Record<MousePace, { pxPerMs: number; overshoot: number }> = {
-  natural: { pxPerMs: 1.8, overshoot: 0.06 },
-  fast: { pxPerMs: 3.6, overshoot: 0 },
-  instant: { pxPerMs: Infinity, overshoot: 0 },
+const PACE: Record<MousePace, { pxPerMs: number }> = {
+  // Tuned for a calm, deliberate feel: long cross-screen travels glide rather
+  // than dart. Short hops are governed by the duration floor below, so lowering
+  // this only slows the big moves.
+  natural: { pxPerMs: 1.5 },
+  fast: { pxPerMs: 3.6 },
+  instant: { pxPerMs: Infinity },
 };
 
-const FRAME_MS = 16; // ~60fps sampling of the path
+const FRAME_MS = 16; // ~60fps sampling cadence for the path
 
 /**
  * Moves the (real) Playwright pointer from `from` to `to` along an eased path,
@@ -28,6 +31,14 @@ const FRAME_MS = 16; // ~60fps sampling of the path
  *
  * The app sees genuine pointer movement (so hover states fire); the cursor the
  * viewer sees is drawn in post from the samples.
+ *
+ * Position is advanced by **real elapsed time** (not by frame index): each
+ * `page.mouse.move` is an async CDP round-trip of variable latency, so a path
+ * progressed by `i/frames` would place evenly-spaced positions at *unevenly*
+ * spaced timestamps — and the compositor, which interpolates by time, would then
+ * render visible velocity jitter. Sampling `ease(elapsed/duration)` keeps every
+ * recorded sample on the intended easing curve in the time domain, so the
+ * composited cursor glides with a continuous, natural velocity.
  */
 export async function moveCursor(
   page: Page,
@@ -36,7 +47,7 @@ export async function moveCursor(
   to: Point,
   pace: MousePace,
 ): Promise<Point> {
-  const { pxPerMs, overshoot } = PACE[pace];
+  const { pxPerMs } = PACE[pace];
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const distance = Math.hypot(dx, dy);
@@ -47,37 +58,25 @@ export async function moveCursor(
     return to;
   }
 
+  // Longer travels take proportionally longer, clamped to a calm, readable range.
   const duration = Math.min(1400, Math.max(180, distance / pxPerMs));
-  const frames = Math.max(2, Math.round(duration / FRAME_MS));
 
-  // Optionally aim slightly past the target, then settle back onto it.
-  const over: Point = { x: to.x + dx * overshoot, y: to.y + dy * overshoot };
+  // Anchor the start position at the move's start time so the idle→move
+  // transition is crisp (the compositor holds, then begins moving exactly here).
+  recorder.sampleCursor(from.x, from.y);
 
-  // Main eased glide toward the (possibly overshot) aim point.
-  for (let i = 1; i <= frames; i++) {
-    const p = easeInOutCubic(i / frames);
-    const x = from.x + (over.x - from.x) * p;
-    const y = from.y + (over.y - from.y) * p;
+  const start = Date.now();
+  for (;;) {
+    await sleep(FRAME_MS);
+    const p = Math.min(1, (Date.now() - start) / duration);
+    const e = easeInOutCubic(p);
+    const x = from.x + dx * e;
+    const y = from.y + dy * e;
     await page.mouse.move(x, y);
     recorder.sampleCursor(x, y);
-    await sleep(FRAME_MS);
+    if (p >= 1) break;
   }
 
-  // Settle from the overshoot back onto the exact target.
-  if (overshoot > 0) {
-    const settleFrames = 3;
-    for (let i = 1; i <= settleFrames; i++) {
-      const p = i / settleFrames;
-      const x = over.x + (to.x - over.x) * p;
-      const y = over.y + (to.y - over.y) * p;
-      await page.mouse.move(x, y);
-      recorder.sampleCursor(x, y);
-      await sleep(FRAME_MS);
-    }
-  }
-
-  await page.mouse.move(to.x, to.y);
-  recorder.sampleCursor(to.x, to.y);
   return to;
 }
 
