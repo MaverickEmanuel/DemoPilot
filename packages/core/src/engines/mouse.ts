@@ -17,7 +17,7 @@ const PACE: Record<MousePace, { pxPerMs: number }> = {
   // Tuned for a calm, deliberate feel: long cross-screen travels glide rather
   // than dart. Short hops are governed by the duration floor below, so lowering
   // this only slows the big moves.
-  natural: { pxPerMs: 1.5 },
+  natural: { pxPerMs: 0.9 },
   fast: { pxPerMs: 3.6 },
   instant: { pxPerMs: Infinity },
 };
@@ -61,7 +61,7 @@ export async function moveCursor(
 
   // Longer travels take proportionally longer, clamped to a calm, readable range.
   // The global `speed` multiplier scales the whole travel (faster > 1, slower < 1).
-  const duration = Math.min(1400, Math.max(180, distance / pxPerMs)) / speed;
+  const duration = Math.min(2200, Math.max(240, distance / pxPerMs)) / speed;
 
   // Anchor the start position at the move's start time so the idle→move
   // transition is crisp (the compositor holds, then begins moving exactly here).

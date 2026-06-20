@@ -136,17 +136,28 @@ Targets are **accessibility-first** (`role` + `name`), which survives markup chu
 name: Sign up and create your first project
 baseUrl: http://localhost:4321
 viewport: { width: 1280, height: 800 }
-defaults: { typeCadence: human, mousePace: natural }
+defaults: { typeCadence: human, mousePace: natural, zoom: { level: 1.25 } }
 steps:
   - goto: /
   - narrate: First, create your account
+  - zoom: in        # hold one sustained zoom across the whole login…
   - type:  { target: { role: textbox, name: Email }, text: demo@acme.com }
   - type:  { target: { role: textbox, name: Password }, text: hunter2demo }
   - click: { target: { role: button, name: Create account } }
+  - zoom: out        # …and release it after submit
   - waitFor: { target: { text: Welcome to Acme } }
 ```
 
-Step kinds: `goto · click · type · press · hover · scroll · waitFor · select · pause · narrate`.
+Step kinds: `goto · click · type · press · hover · scroll · waitFor · select · pause · narrate · zoom`.
+
+The compositor zooms automatically toward whatever's being acted on. A run of
+nearby fields (like a login) holds **one** sustained, steady zoom anchored on the
+form, while each important button click gets its own slightly deeper zoom
+centered on the button. `defaults.zoom.level` sets the base magnification
+(default `1.25`, `1` disables) and `defaults.zoom.clickBoost` how much deeper
+clicks punch in (default `0.1`); the optional `zoom: in` / `zoom: out` steps let
+you force a region explicitly. The cursor itself travels at a calm, deliberate
+pace (tune per demo with `defaults.mousePace` or the global `speed`).
 
 ## Project layout
 

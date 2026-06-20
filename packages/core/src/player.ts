@@ -73,6 +73,9 @@ export async function playDemo(script: DemoScript, opts: PlayOptions): Promise<P
   // Finalize the timeline first; its duration tells the screencast assembler how
   // long the clean video should be, and its t=0 anchors the frame alignment.
   const timeline = recorder.finish();
+  // Carry the resolved zoom config to the compositor (and the sidecar
+  // timeline.json) so the render's zoom intensity is authorable per demo.
+  timeline.zoom = { level: script.defaults.zoom.level, clickBoost: script.defaults.zoom.clickBoost };
   const videoPath = await session.finish({ alignToWall: recorder.startedAt, durationMs: timeline.durationMs });
   return { videoPath, timeline };
 }
@@ -185,6 +188,13 @@ async function runStep(
 
   if ("narrate" in step) {
     recorder.narrate(step.narrate);
+    return cursor;
+  }
+
+  if ("zoom" in step) {
+    // Post-production marker only: it has no effect on the live page, it just
+    // brackets an authored zoom region for the compositor.
+    recorder.zoom(step.zoom);
     return cursor;
   }
 
