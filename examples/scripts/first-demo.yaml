@@ -20,7 +20,10 @@ defaults:
   # calibrated marketing defaults, shown for easy tuning.
   zoom:
     minZoom: 1.15
-    maxZoom: 1.85
+    # Kept moderate: a deeper punch crops context around small targets (the
+    # corner "New Project" button, the modal fields) and softens the upscaled
+    # capture. 1.55 still reads as a clear zoom.
+    maxZoom: 1.55
 steps:
   - goto: /
   - narrate: First, create your account
@@ -53,4 +56,4 @@ steps:
       target: { role: button, name: Create }
   - waitFor:
       target: { text: Marketing site }
-  - pause: 800
+  - pause: 400

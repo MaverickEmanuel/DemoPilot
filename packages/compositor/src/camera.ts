@@ -54,12 +54,26 @@ const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.m
 const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
 
 // Lead-in before a group's first action and tail after its last (cinematic hold).
-const LEAD_MS = 360;
-const TAIL_MS = 700;
-// Minimum establishing gap carved out for a far (zoom-out) handoff.
+// Lead is generous so the camera *anticipates* arrival (settles on the next target
+// a beat before it acts); tail is kept tight so the demo stays responsive and the
+// camera moves on to the next beat without dwelling on a finished action.
+const LEAD_MS = 440;
+const TAIL_MS = 580;
+// Minimum establishing gap carved out for a far handoff.
 const GAP_MIN_MS = 220;
 // Box padding before computing depth, for a little breathing room.
 const BOX_PAD = 1.1;
+
+// Far-handoff establishing pull-back. Rather than zooming (nearly) all the way
+// out between far-apart shots — which reads as an awkward "reset" — the camera
+// stays in the app context and pulls back only modestly while it glides to the
+// next target. The establishing depth is the shallower of the two shots reduced
+// by ESTABLISH_DROP, floored by the config's `establishLevel`.
+const ESTABLISH_DROP = 0.28;
+// Outro: after the final action the camera eases to a gentle "landing" framing
+// (a slight pull-back that reveals the result in context) instead of a full
+// zoom-out to a wide, empty shot — which read as a soft, slow reset.
+const OUTRO_REST = 1.12;
 
 interface Resolved {
   minZoom: number;
@@ -79,7 +93,10 @@ function resolve(z: ZoomConfig | undefined): Resolved {
   const level = z?.level ?? 1.25;
   return {
     minZoom: z?.minZoom ?? 1.0,
-    maxZoom: z?.maxZoom ?? Math.max(1.0, level > 1.25 ? level : 1.8),
+    // Capped lower than before: deep zoom into small targets (a corner button, a
+    // modal field) crops surrounding context and softens the already-upscaled
+    // capture. 1.55 keeps a clear "punch" while showing more around the target.
+    maxZoom: z?.maxZoom ?? Math.max(1.0, level > 1.25 ? level : 1.55),
     innerSafeX: z?.innerSafeX ?? 0.1,
     innerSafeY: z?.innerSafeY ?? 0.1,
     establishLevel: z?.establishLevel ?? 1.06,
@@ -232,18 +249,26 @@ function targetAt(
       const ax = lerp(g.from.anchor.x, g.to.anchor.x, u);
       const ay = lerp(g.from.anchor.y, g.to.anchor.y, u);
       if (g.far) {
-        // Ease the depth out toward `establishLevel` and back in across the gap,
-        // while gliding the focus toward the destination.
+        // Gentle establishing pull-back: stay in the app context and ease the
+        // depth back only modestly (toward `establish`, not all the way out)
+        // while gliding the focus toward the destination. `establish` never goes
+        // below `establishLevel` (the floor) nor deeper than the bridging base.
         const dome = Math.sin(Math.PI * u); // 0 → 1 → 0
         const base = lerp(g.from.level, g.to.level, u);
-        const scale = lerp(base, cfg.establishLevel, dome);
+        const establish = Math.max(cfg.establishLevel, Math.min(g.from.level, g.to.level) - ESTABLISH_DROP);
+        const scale = lerp(base, Math.min(establish, base), dome);
         return { scale, focusX: ax, focusY: ay };
       }
       // Near: stay zoomed and pan — morph depth and anchor together.
       return { scale: lerp(g.from.level, g.to.level, u), focusX: ax, focusY: ay };
     }
   }
-  // Idle (before first shot / after last): wide, centered.
+  // Idle. Before the first shot the camera is wide and the intro reveal zooms in.
+  // After the last shot it eases to a gentle landing framing (a slight pull-back
+  // that shows the result in context) rather than a full zoom-out to wide.
+  if (shots.length && t >= shots[shots.length - 1].focusEnd) {
+    return { scale: OUTRO_REST, focusX: cx, focusY: cy };
+  }
   return { scale: 1, focusX: cx, focusY: cy };
 }
 

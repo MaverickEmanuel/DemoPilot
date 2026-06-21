@@ -13,13 +13,27 @@ const STAGE_BG = "#0a0e1a";
 
 // --- Synthetic motion blur tuning (content-agnostic; tuned by eye at 60 fps) ---
 // Camera blur: map per-frame camera speed (card-space px/frame) to a small blur.
-const CAM_BLUR_GAIN = 0.05;
-const CAM_BLUR_MAX = 7;
-// Cursor trail: ghosts along the recent path, faded by 0.5^n, gated by speed so
-// slow/precise moves stay crisp. Speed is in video px/s.
-const TRAIL_LAYERS = 4;
-const TRAIL_SPEED_LO = 1200;
-const TRAIL_SPEED_HI = 2000;
+// Kept deliberately light — strong blur smears text/UI during zooms and reads as
+// low-quality. Just enough to take the edge off 60 fps transitions, no more.
+const CAM_BLUR_GAIN = 0.03;
+const CAM_BLUR_MAX = 4;
+// The cursor smears more readily than the UI (it's small and high-contrast), so
+// cap its blur tighter than the content's — a crisp pointer reads as intentional.
+const CURSOR_BLUR_MAX = 2;
+// Fast cursor flicks get a smooth motion blur rather than a discrete ghost trail:
+// stacked ghost copies read as stray "loading dots" (especially when the camera's
+// spring momentarily stalls right as the cursor whips past), whereas a continuous
+// smear always reads as motion. Gated by cursor speed (video px/s) so slow,
+// precise moves stay crisp. (The opt-in "sampled" mode still uses a real <Trail>.)
+const TRAIL_LAYERS = 3; // sampled-mode <Trail> only
+const CURSOR_SMEAR_SPEED_LO = 1500;
+const CURSOR_SMEAR_SPEED_HI = 2800;
+// During a fast camera move the cursor is just travelling to the next target, so
+// fade it down to keep attention on the product (it fades back in as the camera
+// settles on the action). Driven by camera speed (card-space px/frame).
+const CURSOR_FADE_SPEED_LO = 8;
+const CURSOR_FADE_SPEED_HI = 34;
+const CURSOR_FADE_MIN = 0.45;
 // Sampled (high-quality) mode: re-renders children at sub-frame offsets, so
 // render cost ≈ SAMPLED_SAMPLES× the synthetic path. Opt-in only.
 const SAMPLED_SHUTTER = 180;
@@ -100,7 +114,6 @@ export const Demo: React.FC<DemoCompositionProps> = ({
       vw={vw}
       vh={vh}
       syntheticBlur={syntheticBlur}
-      trail={syntheticBlur}
       layoutScale={layout.scale}
     />
   );
@@ -229,11 +242,9 @@ function useCameraView(props: Pick<LayerProps, "track" | "zoomOnClick" | "vw" | 
   const cam = zoomOnClick ? cameraAt(track, tMs) : { scale: 1, focusX: vw / 2, focusY: vh / 2 };
   const view = cameraTransform(cam, vw, vh);
   // Only the real camera produces motion; with zoom off the view is the identity.
-  const blurPx =
-    syntheticBlur && zoomOnClick
-      ? clamp(cameraSpeedAt(track, tMs, vw, vh) * CAM_BLUR_GAIN, 0, CAM_BLUR_MAX)
-      : 0;
-  return { tMs, fps, view, blurPx };
+  const camSpeed = syntheticBlur && zoomOnClick ? cameraSpeedAt(track, tMs, vw, vh) : 0;
+  const blurPx = clamp(camSpeed * CAM_BLUR_GAIN, 0, CAM_BLUR_MAX);
+  return { tMs, fps, view, blurPx, camSpeed };
 }
 
 const blurFilter = (px: number): string | undefined => (px > 0.05 ? `blur(${px}px)` : undefined);
@@ -283,56 +294,54 @@ const VideoLayer: React.FC<LayerProps & { videoFile: string }> = ({
  * (so it tracks the focused element), while the glyph stays a constant on-screen
  * size regardless of zoom. This matches premium tools (Screen Studio/Cap), where
  * the pointer never balloons at high zoom. */
-const CursorLayer: React.FC<LayerProps & { trail: boolean; layoutScale: number }> = ({
+const CursorLayer: React.FC<LayerProps & { layoutScale: number }> = ({
   timeline,
   track,
   zoomOnClick,
   vw,
   vh,
   syntheticBlur,
-  trail,
   layoutScale,
 }) => {
-  const { tMs, fps, view, blurPx } = useCameraView({ track, zoomOnClick, vw, vh, syntheticBlur });
+  const { tMs, fps, view, blurPx, camSpeed } = useCameraView({ track, zoomOnClick, vw, vh, syntheticBlur });
   const frameMs = 1000 / fps;
   const cursor = cursorAt(timeline.cursor, tMs);
   const press = cursorPressAt(timeline, tMs);
+
+  // The cursor smears less than the content, so cap its blur tighter. It blurs
+  // both when the camera moves and when the cursor itself flicks fast — a smooth
+  // motion smear in place of a ghost trail. And it fades while the camera is
+  // travelling (it's relocating, not acting) so it doesn't pull focus mid-pan.
+  const prevCursor = cursorAt(timeline.cursor, Math.max(0, tMs - frameMs));
+  const cursorSpeed = Math.hypot(cursor.x - prevCursor.x, cursor.y - prevCursor.y) / (frameMs / 1000); // px/s
+  const smear = syntheticBlur
+    ? clamp01((cursorSpeed - CURSOR_SMEAR_SPEED_LO) / (CURSOR_SMEAR_SPEED_HI - CURSOR_SMEAR_SPEED_LO)) * CURSOR_BLUR_MAX
+    : 0;
+  const cursorBlur = Math.min(CURSOR_BLUR_MAX, Math.max(blurPx, smear));
+  const cursorOpacity =
+    1 - (1 - CURSOR_FADE_MIN) * clamp01((camSpeed - CURSOR_FADE_SPEED_LO) / (CURSOR_FADE_SPEED_HI - CURSOR_FADE_SPEED_LO));
 
   // Project a video-space point to screen (card) space through the camera.
   const project = (x: number, y: number) => ({ x: view.tx + x * view.scale, y: view.ty + y * view.scale });
   // Constant on-screen size: undo the card layout scale so canvas px is fixed.
   const glyphScale = (CURSOR_BASE_PX * track.cursorScale) / (CURSOR_SVG_PX * layoutScale);
 
-  let ghosts: React.ReactNode = null;
-  if (trail) {
-    const prev = cursorAt(timeline.cursor, Math.max(0, tMs - frameMs));
-    const speed = Math.hypot(cursor.x - prev.x, cursor.y - prev.y) / (frameMs / 1000); // px/s
-    const gate = clamp01((speed - TRAIL_SPEED_LO) / (TRAIL_SPEED_HI - TRAIL_SPEED_LO));
-    if (gate > 0) {
-      ghosts = Array.from({ length: TRAIL_LAYERS }, (_, i) => {
-        const n = i + 1;
-        const g = project(...sampleXY(timeline, tMs - n * frameMs));
-        return <Cursor key={n} x={g.x} y={g.y} scale={glyphScale} opacity={Math.pow(0.5, n) * gate} />;
-      });
-    }
-  }
-
   const c = project(cursor.x, cursor.y);
   return (
     <div
-      style={{ position: "absolute", width: vw, height: vh, pointerEvents: "none", filter: blurFilter(blurPx) }}
+      style={{
+        position: "absolute",
+        width: vw,
+        height: vh,
+        pointerEvents: "none",
+        opacity: cursorOpacity,
+        filter: blurFilter(cursorBlur),
+      }}
     >
-      {ghosts}
       <Cursor x={c.x} y={c.y} scale={glyphScale} press={press} />
     </div>
   );
 };
-
-/** Cursor position at a time as a tuple, for spreading into `project`. */
-function sampleXY(timeline: Timeline, tMs: number): [number, number] {
-  const p = cursorAt(timeline.cursor, Math.max(0, tMs));
-  return [p.x, p.y];
-}
 
 /** A subtle, springy click ripple — a soft filled disc plus a thin expanding ring. */
 const Ripple: React.FC<{ x: number; y: number; progress: number }> = ({ x, y, progress }) => {
