@@ -4,7 +4,7 @@ import type { DemoCompositionProps } from "./types";
 import { cursorAt, clickPulseAt, captionAt, contentStartMs } from "./interp";
 import { computeCameraTrack, cameraAt, cameraTransform } from "./camera";
 import { Cursor } from "./Cursor";
-import { FRAME, CANVAS, backgroundFor, cardLayout } from "./frame";
+import { FRAME, CANVAS, meshBackgroundAt, cardLayout } from "./frame";
 
 /** Matches the seed app's dark background so the intro reveal is seamless. */
 const STAGE_BG = "#0a0e1a";
@@ -29,6 +29,7 @@ export const Demo: React.FC<DemoCompositionProps> = ({
   captions,
   framed = true,
   background,
+  backgroundDrift = false,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -77,7 +78,9 @@ export const Demo: React.FC<DemoCompositionProps> = ({
   };
 
   return (
-    <AbsoluteFill style={{ background: framed ? backgroundFor(background) : STAGE_BG }}>
+    <AbsoluteFill
+      style={{ background: framed ? meshBackgroundAt(background, tMs / 1000, backgroundDrift) : STAGE_BG }}
+    >
       {/* Card wrapper: scales the video-space card into the canvas and centers it.
           Everything inside works in video pixels. */}
       <div

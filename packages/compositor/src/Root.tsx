@@ -19,6 +19,7 @@ export const RemotionRoot: React.FC = () => {
         captions: true,
         framed: true,
         background: undefined,
+        backgroundDrift: false,
       } satisfies DemoCompositionProps}
       // Real dimensions/duration come from the timeline via calculateMetadata.
       durationInFrames={30}
