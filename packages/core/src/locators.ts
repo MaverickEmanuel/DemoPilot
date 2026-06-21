@@ -1,6 +1,7 @@
 import type { Locator, Page } from "playwright";
 import type { Target } from "./schema.js";
 import type { Point } from "./engines/mouse.js";
+import type { Box, TargetGeometry } from "./timeline.js";
 
 /**
  * Resolves a Target to a Playwright Locator, preferring accessibility queries
@@ -33,6 +34,39 @@ export async function centerOf(locator: Locator): Promise<Point> {
   const box = await locator.boundingBox();
   if (!box) throw new Error("Element is not visible / has no layout box");
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/**
+ * Resolves the geometry the compositor needs to frame an action: the element's
+ * center, its bounding box (for adaptive zoom depth) and a stable signature of
+ * the nearest container (for grouping fields that belong to the same form).
+ */
+export async function geometryOf(
+  locator: Locator,
+): Promise<{ point: Point; bbox: Box; container?: string }> {
+  await locator.waitFor({ state: "visible" });
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("Element is not visible / has no layout box");
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const container = await locator
+    .evaluate((el) => {
+      const host = (el as Element).closest(
+        'form,dialog,[role="dialog"],[role="form"],[role="group"],section,main,nav,header,aside',
+      );
+      if (!host) return undefined;
+      const tag = host.tagName.toLowerCase();
+      const id = host.id ? `#${host.id}` : "";
+      const role = host.getAttribute("role");
+      const aria = host.getAttribute("aria-label");
+      return `${tag}${id}${role ? `[role=${role}]` : ""}${aria ? `[aria=${aria}]` : ""}`;
+    })
+    .catch(() => undefined);
+  return { point, bbox: box, container: container ?? undefined };
+}
+
+/** Packs resolved geometry into the TargetGeometry recorded on the timeline. */
+export function toGeometry(g: { point: Point; bbox: Box; container?: string }): TargetGeometry {
+  return { x: g.point.x, y: g.point.y, bbox: g.bbox, container: g.container };
 }
 
 export function describeTarget(target: Target): string {

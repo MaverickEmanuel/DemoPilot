@@ -92,6 +92,18 @@ export const StepSchema = z.union([
         .describe("Authored zoom region: 'in' forces a sustained zoom that holds until 'out'"),
     })
     .strict(),
+  z
+    .object({
+      group: z
+        .union([
+          z.object({ name: z.string() }).strict().describe("Open a named action group"),
+          z.literal("end").describe("Close the current action group"),
+        ])
+        .describe(
+          "Authored action group: '{ name: … }' opens a group the camera holds one anchor across; 'end' closes it",
+        ),
+    })
+    .strict(),
 ]);
 export type Step = z.infer<typeof StepSchema>;
 
@@ -101,38 +113,73 @@ export const DemoDefaultsSchema = z
     mousePace: MousePace.default("natural"),
     /** Reading pause (ms) after each navigation — explicit `goto` *and* client-side
      * (form submit / SPA route change) — before the next step runs. */
-    readPause: z.number().int().nonnegative().default(900),
+    readPause: z.number().int().nonnegative().default(1100),
     /** Pause (ms) after the cursor arrives on a target, before the click/type fires.
      * Reads as the cursor "taking aim", so actions don't feel instantaneous. */
     preActionDwell: z.number().int().nonnegative().default(450),
     /** Hold (ms) after a click or type completes so the result is readable before
-     * the demo moves on. */
-    postActionHold: z.number().int().nonnegative().default(650),
+     * the demo moves on. Tuned a touch longer than instantaneous so each action
+     * group gets a beat to settle before the camera moves on (cinematic pacing). */
+    postActionHold: z.number().int().nonnegative().default(800),
     /** Global pace multiplier (> 0). 1 = the calibrated default pace; values above 1
      * play faster (durations shrink), below 1 play slower (durations stretch). Scales
      * the dwell/hold/reading pauses, lead-in/tail, and mouse-travel & typing durations.
      * Author-controlled `pause` and `waitFor` steps are left literal (they may be
      * synchronized to app behavior). */
     speed: z.number().positive().default(1),
-    /** Post-production zoom settings (applied by the compositor, not playback). */
+    /** Post-production camera settings (applied by the compositor, not playback).
+     * The camera understands "action groups" (e.g. a whole sign-in) and holds one
+     * anchor across each group, then springs/pans to the next — depth chosen
+     * automatically from the acted-on element's size. Named `zoom` for back-compat. */
     zoom: z
       .object({
-        /** Max magnification for activity-driven zooms (1 = no zoom). The zoom
-         * eases toward this level over a sustained group of actions. */
+        /** Legacy/fallback magnification (1 = no zoom). Used when min/max are unset. */
         level: z
           .number()
           .min(1)
           .max(2)
           .default(1.25)
-          .describe("Zoom magnification for activity zooms (1 = none)"),
-        /** Extra magnification added on top of `level` for button clicks, so
-         * clicks punch in a little deeper and centered on the button. */
+          .describe("Fallback zoom magnification (1 = none); superseded by min/maxZoom"),
+        /** Deprecated: clicks no longer punch in; they stay anchored to their group. */
         clickBoost: z
           .number()
           .min(0)
           .max(1)
-          .default(0.1)
-          .describe("Additional magnification for button clicks, over `level`"),
+          .optional()
+          .describe("Deprecated — per-click punch removed; clicks stay anchored to their group"),
+        /** Shallowest magnification the adaptive camera will choose (large regions). */
+        minZoom: z.number().min(1).max(3).default(1.15).describe("Shallowest adaptive zoom"),
+        /** Deepest magnification the adaptive camera will choose (small targets). */
+        maxZoom: z.number().min(1).max(3).default(1.85).describe("Deepest adaptive zoom"),
+        /** Fraction of the frame an action group's box should fill (drives depth). */
+        fill: z.number().min(0.2).max(1).default(0.62).describe("Target frame fill for a group"),
+        /** Magnification held during a zoom-out handoff between far-apart groups. */
+        establishLevel: z
+          .number()
+          .min(1)
+          .max(2)
+          .default(1.06)
+          .describe("Magnification during a far-jump establishing handoff"),
+        /** Pan vs. zoom-out threshold, as a fraction of the viewport diagonal. */
+        panThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.42)
+          .describe("Anchor distance (fraction of diagonal) above which a jump zooms out"),
+        /** Spring angular frequency (rad/s); higher = snappier camera. */
+        stiffness: z.number().min(1).max(40).default(8).describe("Camera spring frequency (rad/s)"),
+        /** Spring damping ratio (1 = critical; <1 adds a subtle settle). */
+        damping: z.number().min(0.4).max(2).default(0.92).describe("Camera spring damping ratio"),
+        /** Max edge-to-edge gap (ms) for two actions to merge into one group. */
+        groupGapMs: z
+          .number()
+          .int()
+          .nonnegative()
+          .default(1800)
+          .describe("Max gap (ms) for adjacent actions to merge into one group"),
+        /** Cursor magnification for visibility (1 = native size). */
+        cursorScale: z.number().min(1).max(3).default(1.5).describe("Cursor magnification"),
       })
       .strict()
       .default({}),

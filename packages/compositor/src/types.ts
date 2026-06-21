@@ -9,19 +9,54 @@ export interface CursorSample {
   y: number;
 }
 
+/** Axis-aligned bounding box of an acted-on element, in video pixels. */
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type TimelineEvent =
   | { kind: "navigate"; t: number; url: string }
-  | { kind: "click"; t: number; x: number; y: number; button: "left" | "right" | "middle" }
-  | { kind: "type"; t: number; tStart: number; text: string }
+  | {
+      kind: "click";
+      t: number;
+      x: number;
+      y: number;
+      button: "left" | "right" | "middle";
+      bbox?: Box;
+      container?: string;
+    }
+  | {
+      kind: "type";
+      t: number;
+      tStart: number;
+      text: string;
+      x?: number;
+      y?: number;
+      bbox?: Box;
+      container?: string;
+    }
   | { kind: "scroll"; t: number; x: number; y: number }
   | { kind: "narrate"; t: number; text: string }
-  | { kind: "zoom"; t: number; action: "in" | "out" };
+  | { kind: "zoom"; t: number; action: "in" | "out" }
+  | { kind: "group"; t: number; action: "start" | "end"; name?: string };
 
+/** Post-production camera/zoom settings. Named `zoom` for back-compat; the
+ * unset keys are filled with defaults by the camera module. */
 export interface ZoomConfig {
-  /** Max magnification for activity zooms (1 = no zoom). */
   level: number;
-  /** Extra magnification added on top of `level` for button clicks. */
   clickBoost?: number;
+  minZoom?: number;
+  maxZoom?: number;
+  fill?: number;
+  establishLevel?: number;
+  panThreshold?: number;
+  stiffness?: number;
+  damping?: number;
+  groupGapMs?: number;
+  cursorScale?: number;
 }
 
 export interface Timeline {
@@ -45,6 +80,8 @@ export interface DemoCompositionProps {
   /** Present the recording as an inset, rounded "app card" on a background
    * (Screen-Studio style). When false, the video fills the frame edge-to-edge. */
   framed: boolean;
+  /** Named background preset behind the app card when framed. */
+  background?: string;
   // Remotion requires composition props to be assignable to Record<string, unknown>.
   [key: string]: unknown;
 }

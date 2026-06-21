@@ -27,6 +27,11 @@ interface RenderArgs {
   framed: boolean;
   headless: boolean;
   legacyCapture: boolean;
+  background?: string;
+  zoomMin?: number;
+  zoomMax?: number;
+  spring?: number;
+  panThreshold?: number;
 }
 
 const USAGE = `DemoPilot — render a demo script to MP4.
@@ -41,6 +46,12 @@ Options:
       --no-zoom          Disable the subtle zoom-toward-cursor
       --no-captions      Disable narration captions
       --no-frame         Disable the framed app-card presentation (full-bleed)
+      --background <b>    Background preset (midnight|dusk|daylight|aurora) or a
+                         raw CSS background string
+      --zoom-min <n>     Shallowest adaptive zoom (default 1.15)
+      --zoom-max <n>     Deepest adaptive zoom for small targets (default 1.85)
+      --spring <n>       Camera spring frequency in rad/s (default 8; higher=snappier)
+      --pan-threshold <n> Pan vs. zoom-out cutoff, fraction of the diagonal (default 0.42)
       --headed           Run the capture browser headed (default: headless)
       --legacy-capture   Use the realtime recordVideo backend instead of the
                          crisper, constant-fps CDP screencast capture
@@ -104,6 +115,21 @@ function parseRenderArgs(argv: string[]): RenderArgs {
       case "--no-frame":
         args.framed = false;
         break;
+      case "--background":
+        args.background = toks[++i];
+        break;
+      case "--zoom-min":
+        args.zoomMin = num("--zoom-min", toks[++i]);
+        break;
+      case "--zoom-max":
+        args.zoomMax = num("--zoom-max", toks[++i]);
+        break;
+      case "--spring":
+        args.spring = num("--spring", toks[++i]);
+        break;
+      case "--pan-threshold":
+        args.panThreshold = num("--pan-threshold", toks[++i]);
+        break;
       case "--headed":
         args.headless = false;
         break;
@@ -130,6 +156,11 @@ async function cmdRender(argv: string[]): Promise<void> {
 
   const script = await loadDemoScript(resolve(baseCwd, args.scriptPath));
   if (args.speed !== undefined) script.defaults.speed = args.speed;
+  // Camera overrides flow through the resolved zoom config carried on the timeline.
+  if (args.zoomMin !== undefined) script.defaults.zoom.minZoom = args.zoomMin;
+  if (args.zoomMax !== undefined) script.defaults.zoom.maxZoom = args.zoomMax;
+  if (args.spring !== undefined) script.defaults.zoom.stiffness = args.spring;
+  if (args.panThreshold !== undefined) script.defaults.zoom.panThreshold = args.panThreshold;
 
   const name = basename(args.scriptPath).replace(/\.(ya?ml|json)$/i, "") || "demo";
   const outPath = resolve(baseCwd, args.out ?? join("renders", `${name}.mp4`));
@@ -162,6 +193,7 @@ async function cmdRender(argv: string[]): Promise<void> {
     zoomOnClick: args.zoom,
     captions: args.captions,
     framed: args.framed,
+    background: args.background,
     browserExecutable: resolveChromeForRemotion(),
     onProgress: (r) => process.stderr.write(`\r  ${(r * 100).toFixed(0)}%   `),
   });

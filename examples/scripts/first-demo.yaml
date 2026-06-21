@@ -15,17 +15,20 @@ defaults:
   # Global pace multiplier: 1 = these defaults, >1 plays faster, <1 slower.
   # Scales every dwell/hold/reading pause and the mouse-travel & typing durations.
   speed: 1.0
-  # Post-production zoom (applied by the compositor). `level` is the max
-  # magnification for activity-driven zooms (1 = no zoom).
+  # Post-production camera (applied by the compositor). Depth is chosen
+  # automatically per action group between minZoom and maxZoom; these are the
+  # calibrated marketing defaults, shown for easy tuning.
   zoom:
-    level: 1.25
+    minZoom: 1.15
+    maxZoom: 1.85
 steps:
   - goto: /
   - narrate: First, create your account
-  # `zoom: in` forces a single sustained zoom that holds through the whole login
-  # (email → password → submit) and releases at `zoom: out`. The automatic
-  # behavior already merges these, but the explicit markers make it deliberate.
-  - zoom: in
+  # An explicit action group holds ONE anchor across the whole sign-in
+  # (email → password → submit) — the camera never punches per click and never
+  # pumps between fields. The container heuristic would group these anyway, but
+  # the marker makes it deliberate and names the action.
+  - group: { name: Sign in }
   - type:
       target: { role: textbox, name: Email }
       text: demo@acme.com
@@ -34,10 +37,13 @@ steps:
       text: hunter2demo
   - click:
       target: { role: button, name: Create account }
-  - zoom: out
+  - group: end
   - waitFor:
       target: { text: Welcome to Acme }
   - narrate: Now let's create your first project
+  # No explicit group here: the camera groups automatically. The "New Project"
+  # button (header) and the modal form live in different containers, so they
+  # become two shots — the camera punches the button, then pans into the form.
   - click:
       target: { role: button, name: New Project }
   - type:

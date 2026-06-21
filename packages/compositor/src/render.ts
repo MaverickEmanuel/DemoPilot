@@ -20,6 +20,9 @@ export interface RenderDemoOptions {
   captions?: boolean;
   /** Present the recording as an inset, framed app card (default true). */
   framed?: boolean;
+  /** Named background preset (e.g. "midnight", "dusk", "daylight", "aurora") or
+   * a raw CSS background string. Only used when framed. */
+  background?: string;
   onProgress?: (ratio: number) => void;
   /**
    * Path to a Chrome/Chromium executable for Remotion to use. Defaults to
@@ -61,6 +64,7 @@ export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoRes
     zoomOnClick: opts.zoomOnClick ?? true,
     captions: opts.captions ?? true,
     framed: opts.framed ?? true,
+    background: opts.background,
   };
 
   const browserExecutable = opts.browserExecutable ?? process.env.DEMOPILOT_CHROME;
