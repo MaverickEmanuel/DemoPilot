@@ -26,6 +26,9 @@ export interface RenderDemoOptions {
   background?: string;
   /** Subtly drift the mesh background's blobs over time (no-op for non-mesh). */
   backgroundDrift?: boolean;
+  /** Motion blur mode. "synthetic" (default, ~1× cost) | "sampled" (samples× cost)
+   * | "off". */
+  motionBlur?: "synthetic" | "sampled" | "off";
   onProgress?: (ratio: number) => void;
   /**
    * Path to a Chrome/Chromium executable for Remotion to use. Defaults to
@@ -50,7 +53,7 @@ const entryPoint = fileURLToPath(new URL("./index.ts", import.meta.url));
  * Remotion drives its own bundled ffmpeg, so no system ffmpeg is required.
  */
 export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoResult> {
-  const fps = opts.fps ?? 30;
+  const fps = opts.fps ?? 60;
 
   // Remotion's <OffthreadVideo> resolves assets via staticFile() against the
   // bundle's public dir, so stage the recording there under a stable name.
@@ -69,6 +72,7 @@ export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoRes
     framed: opts.framed ?? true,
     background: opts.background,
     backgroundDrift: opts.backgroundDrift ?? false,
+    motionBlur: opts.motionBlur ?? "synthetic",
   };
 
   const browserExecutable = opts.browserExecutable ?? process.env.DEMOPILOT_CHROME;

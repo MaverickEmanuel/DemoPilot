@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildActionGroups } from "../src/groups";
-import { computeCameraTrack, cameraAt, cameraTransform, groupDepth } from "../src/camera";
+import { computeCameraTrack, cameraAt, cameraTransform, cameraSpeedAt, groupDepth } from "../src/camera";
 import { cardLayout, CANVAS, FRAME } from "../src/frame";
 import type { Timeline, Box } from "../src/types";
 
@@ -187,6 +187,25 @@ describe("cameraTransform (fit-to-rect, edge-clamped)", () => {
     expect(tx).toBeCloseTo(0, 6);
     expect(ty).toBeCloseTo(0, 6);
     expect(scale).toBe(1);
+  });
+});
+
+describe("cameraSpeedAt (synthetic motion-blur driver)", () => {
+  it("is ~0 on a settled hold and large during a transition", () => {
+    // Settled hold: one steady group, sampled deep into the hold.
+    const loginTrack = computeCameraTrack(login(), 60);
+    const hold = cameraSpeedAt(loginTrack, 4800, 1280, 800);
+    expect(hold).toBeLessThan(2);
+
+    // Far transition: the camera eases out + pans across the frame.
+    const far = timeline([
+      { kind: "click", t: 1500, x: 200, y: 400, button: "left", bbox: box(170, 380, 60, 40), container: "a" },
+      { kind: "click", t: 6000, x: 1120, y: 400, button: "left", bbox: box(1090, 380, 60, 40), container: "b" },
+    ]);
+    const farTrack = computeCameraTrack(far, 60);
+    let maxSpeed = 0;
+    for (let t = 2200; t <= 5300; t += 50) maxSpeed = Math.max(maxSpeed, cameraSpeedAt(farTrack, t, 1280, 800));
+    expect(maxSpeed).toBeGreaterThan(15);
   });
 });
 

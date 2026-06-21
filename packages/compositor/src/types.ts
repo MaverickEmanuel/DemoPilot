@@ -88,6 +88,10 @@ export interface DemoCompositionProps {
   background?: string;
   /** Subtly drift the mesh background's blobs over time (no-op for non-mesh). */
   backgroundDrift?: boolean;
+  /** Motion blur for camera moves + cursor travel. "synthetic" (default) is a
+   * cheap ~1× per-frame blur + cursor trail; "sampled" uses @remotion/motion-blur
+   * (render cost ≈ samples×); "off" disables it. */
+  motionBlur?: "synthetic" | "sampled" | "off";
   // Remotion requires composition props to be assignable to Record<string, unknown>.
   [key: string]: unknown;
 }

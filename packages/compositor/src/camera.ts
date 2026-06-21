@@ -313,6 +313,22 @@ export function cameraAt(track: CameraTrack, tMs: number): CameraState {
   };
 }
 
+/**
+ * The camera's screen-space speed at time `tMs`, in card-space px per frame —
+ * the magnitude of the applied-transform change over one frame. Combines the
+ * translation delta with the scale delta (weighted by viewport width, since a
+ * scale change moves content proportionally to its extent). Drives synthetic
+ * motion blur: fast pans/zooms smear, holds stay crisp.
+ */
+export function cameraSpeedAt(track: CameraTrack, tMs: number, vw: number, vh: number): number {
+  const frameMs = 1000 / track.fps;
+  const cur = cameraTransform(cameraAt(track, tMs), vw, vh);
+  const prev = cameraTransform(cameraAt(track, Math.max(0, tMs - frameMs)), vw, vh);
+  const dTrans = Math.hypot(cur.tx - prev.tx, cur.ty - prev.ty);
+  const dScale = Math.abs(cur.scale - prev.scale) * vw;
+  return dTrans + dScale;
+}
+
 /** Resolves just the cursor magnification (used when the camera is disabled). */
 export function cursorScaleOf(timeline: Timeline): number {
   return resolve(timeline.zoom).cursorScale;
