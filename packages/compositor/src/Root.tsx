@@ -14,20 +14,21 @@ export const RemotionRoot: React.FC = () => {
       defaultProps={{
         videoFile: "recording.webm",
         timeline: EMPTY_TIMELINE,
-        fps: 30,
+        fps: 60,
         zoomOnClick: true,
         captions: true,
         framed: true,
         background: undefined,
         backgroundDrift: false,
+        motionBlur: "synthetic",
       } satisfies DemoCompositionProps}
       // Real dimensions/duration come from the timeline via calculateMetadata.
-      durationInFrames={30}
-      fps={30}
+      durationInFrames={60}
+      fps={60}
       width={emptyFramed.width}
       height={emptyFramed.height}
       calculateMetadata={({ props }) => {
-        const fps = props.fps ?? 30;
+        const fps = props.fps ?? 60;
         // Framed output is a fixed 16:9 1080p canvas; unframed matches the
         // recording. Overlays still use video-pixel coordinates either way.
         const dims = framedSize(props.timeline.width, props.timeline.height, props.framed ?? true);
