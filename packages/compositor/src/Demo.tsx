@@ -3,7 +3,7 @@ import { AbsoluteFill, OffthreadVideo, staticFile, useCurrentFrame, useVideoConf
 import { CameraMotionBlur, Trail } from "@remotion/motion-blur";
 import type { CameraTrack } from "./camera";
 import type { DemoCompositionProps, Timeline } from "./types";
-import { cursorAt, clickPulseAt, captionAt, contentStartMs } from "./interp";
+import { cursorAt, clickPulseAt, cursorPressAt, captionAt, contentStartMs } from "./interp";
 import { computeCameraTrack, cameraAt, cameraTransform, cameraSpeedAt, type CameraTransform } from "./camera";
 import { Cursor } from "./Cursor";
 import { FRAME, CANVAS, meshBackgroundAt, cardLayout } from "./frame";
@@ -24,6 +24,12 @@ const TRAIL_SPEED_HI = 2000;
 // render cost ≈ SAMPLED_SAMPLES× the synthetic path. Opt-in only.
 const SAMPLED_SHUTTER = 180;
 const SAMPLED_SAMPLES = 8;
+
+// Cursor renders in screen-space at a constant on-screen size (decoupled from the
+// camera zoom). The SVG glyph box is 28px; on-screen canvas size ≈
+// CURSOR_BASE_PX × cursorScale, independent of zoom and card layout.
+const CURSOR_SVG_PX = 28;
+const CURSOR_BASE_PX = 24;
 
 /**
  * Composites the clean recording with a redrawn cursor, click ripples, the
@@ -52,6 +58,7 @@ export const Demo: React.FC<DemoCompositionProps> = ({
   background,
   backgroundDrift = false,
   motionBlur = "synthetic",
+  vignette = true,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -94,6 +101,7 @@ export const Demo: React.FC<DemoCompositionProps> = ({
       vh={vh}
       syntheticBlur={syntheticBlur}
       trail={syntheticBlur}
+      layoutScale={layout.scale}
     />
   );
 
@@ -146,6 +154,17 @@ export const Demo: React.FC<DemoCompositionProps> = ({
           )}
         </div>
       </div>
+
+      {/* A subtle edge vignette adds depth — darkens the canvas corners slightly,
+          below the captions so text stays crisp. */}
+      {vignette && (
+        <AbsoluteFill
+          style={{
+            pointerEvents: "none",
+            background: "radial-gradient(125% 125% at 50% 50%, transparent 58%, rgba(0,0,0,0.16) 100%)",
+          }}
+        />
+      )}
 
       {caption && (
         <div
@@ -258,8 +277,13 @@ const VideoLayer: React.FC<LayerProps & { videoFile: string }> = ({
 };
 
 /** The cursor group: the live cursor plus, in synthetic mode, a speed-gated trail
- * of fading ghosts sampled along the recent Catmull-Rom path. */
-const CursorLayer: React.FC<LayerProps & { trail: boolean }> = ({
+ * of fading ghosts sampled along the recent Catmull-Rom path.
+ *
+ * The cursor lives in SCREEN space — only its position is taken through the camera
+ * (so it tracks the focused element), while the glyph stays a constant on-screen
+ * size regardless of zoom. This matches premium tools (Screen Studio/Cap), where
+ * the pointer never balloons at high zoom. */
+const CursorLayer: React.FC<LayerProps & { trail: boolean; layoutScale: number }> = ({
   timeline,
   track,
   zoomOnClick,
@@ -267,11 +291,17 @@ const CursorLayer: React.FC<LayerProps & { trail: boolean }> = ({
   vh,
   syntheticBlur,
   trail,
+  layoutScale,
 }) => {
   const { tMs, fps, view, blurPx } = useCameraView({ track, zoomOnClick, vw, vh, syntheticBlur });
   const frameMs = 1000 / fps;
   const cursor = cursorAt(timeline.cursor, tMs);
-  const pulse = clickPulseAt(timeline, tMs);
+  const press = cursorPressAt(timeline, tMs);
+
+  // Project a video-space point to screen (card) space through the camera.
+  const project = (x: number, y: number) => ({ x: view.tx + x * view.scale, y: view.ty + y * view.scale });
+  // Constant on-screen size: undo the card layout scale so canvas px is fixed.
+  const glyphScale = (CURSOR_BASE_PX * track.cursorScale) / (CURSOR_SVG_PX * layoutScale);
 
   let ghosts: React.ReactNode = null;
   if (trail) {
@@ -281,26 +311,28 @@ const CursorLayer: React.FC<LayerProps & { trail: boolean }> = ({
     if (gate > 0) {
       ghosts = Array.from({ length: TRAIL_LAYERS }, (_, i) => {
         const n = i + 1;
-        const p = cursorAt(timeline.cursor, Math.max(0, tMs - n * frameMs));
-        return (
-          <Cursor key={n} x={p.x} y={p.y} scale={track.cursorScale} opacity={Math.pow(0.5, n) * gate} />
-        );
+        const g = project(...sampleXY(timeline, tMs - n * frameMs));
+        return <Cursor key={n} x={g.x} y={g.y} scale={glyphScale} opacity={Math.pow(0.5, n) * gate} />;
       });
     }
   }
 
+  const c = project(cursor.x, cursor.y);
   return (
-    <div style={{ ...camGroupStyle(view, vw, vh), pointerEvents: "none", filter: blurFilter(blurPx) }}>
+    <div
+      style={{ position: "absolute", width: vw, height: vh, pointerEvents: "none", filter: blurFilter(blurPx) }}
+    >
       {ghosts}
-      <Cursor
-        x={cursor.x}
-        y={cursor.y}
-        scale={track.cursorScale}
-        pressing={pulse !== null && pulse.progress < 0.32}
-      />
+      <Cursor x={c.x} y={c.y} scale={glyphScale} press={press} />
     </div>
   );
 };
+
+/** Cursor position at a time as a tuple, for spreading into `project`. */
+function sampleXY(timeline: Timeline, tMs: number): [number, number] {
+  const p = cursorAt(timeline.cursor, Math.max(0, tMs));
+  return [p.x, p.y];
+}
 
 /** A subtle, springy click ripple — a soft filled disc plus a thin expanding ring. */
 const Ripple: React.FC<{ x: number; y: number; progress: number }> = ({ x, y, progress }) => {

@@ -92,6 +92,8 @@ export interface DemoCompositionProps {
    * cheap ~1× per-frame blur + cursor trail; "sampled" uses @remotion/motion-blur
    * (render cost ≈ samples×); "off" disables it. */
   motionBlur?: "synthetic" | "sampled" | "off";
+  /** Subtle edge vignette for depth (default true). */
+  vignette?: boolean;
   // Remotion requires composition props to be assignable to Record<string, unknown>.
   [key: string]: unknown;
 }

@@ -29,6 +29,8 @@ export interface RenderDemoOptions {
   /** Motion blur mode. "synthetic" (default, ~1× cost) | "sampled" (samples× cost)
    * | "off". */
   motionBlur?: "synthetic" | "sampled" | "off";
+  /** Subtle edge vignette for depth (default true). */
+  vignette?: boolean;
   onProgress?: (ratio: number) => void;
   /**
    * Path to a Chrome/Chromium executable for Remotion to use. Defaults to
@@ -73,6 +75,7 @@ export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoRes
     background: opts.background,
     backgroundDrift: opts.backgroundDrift ?? false,
     motionBlur: opts.motionBlur ?? "synthetic",
+    vignette: opts.vignette ?? true,
   };
 
   const browserExecutable = opts.browserExecutable ?? process.env.DEMOPILOT_CHROME;
