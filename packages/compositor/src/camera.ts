@@ -1,17 +1,25 @@
 // ----------------------------------------------------------------------------
-// Spring-physics tracking camera
+// Spring-physics tracking camera (fit-to-rect, edge-clamped)
 //
-// The camera frames one action group at a time. Each group gets a single anchor
-// (the center of its members' union box) and an adaptive depth (small targets
-// zoom deeper, large regions shallower). A critically-ish-damped spring chases a
-// time-varying *target*, which produces the motion:
+// The camera frames one action group at a time. Each group gets a single focus
+// center (the center of its members' union box) and an adaptive depth: the
+// target scale fits the bbox into an inner *safe area* (the viewport inset by a
+// constant margin), so small targets zoom deeper and large regions shallower. A
+// critically-ish-damped spring chases a time-varying *target* {scale, focus},
+// which produces the motion:
 //
-//   • within a group        → hold: target = that group's anchor + depth
-//   • between near groups    → PAN: target morphs anchor/depth toward the next
+//   • within a group        → hold: target = that group's focus + depth
+//   • between near groups    → PAN: target morphs focus/depth toward the next
 //                              group while staying zoomed (spring glides over)
 //   • between far groups      → HYBRID: a brief establishing beat eases the depth
 //                              out to `establishLevel`, glides, then eases back in
 //   • before/after the demo  → wide (scale 1)
+//
+// The spring chases the RAW bbox center (no corner clamping). Framing is handled
+// at apply time by `cameraTransform`, which converts (focus, scale) into a
+// translate+scale and clamps the translation so the scaled content always fully
+// covers the viewport — no background bleed, and edge/corner elements are framed
+// as far into the corner as geometry allows instead of being clipped.
 //
 // Navigations always cut a group, so the camera never drags a zoom across a page
 // transition. The whole spring is simulated once into a uniform keyframe track;
@@ -23,8 +31,16 @@ import { buildActionGroups, type ActionGroup, type Vec } from "./groups";
 
 export interface CameraState {
   scale: number;
-  originX: number;
-  originY: number;
+  /** Focus center (raw bbox center) the camera frames, in video pixels. */
+  focusX: number;
+  focusY: number;
+}
+
+/** The applied transform: translate then uniform scale, transform-origin 0 0. */
+export interface CameraTransform {
+  tx: number;
+  ty: number;
+  scale: number;
 }
 
 export interface CameraTrack {
@@ -37,9 +53,6 @@ export interface CameraTrack {
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
 
-// Aesthetic insets so the focal point is never jammed into a corner.
-const SAFE_X = 0.12;
-const SAFE_Y = 0.14;
 // Lead-in before a group's first action and tail after its last (cinematic hold).
 const LEAD_MS = 360;
 const TAIL_MS = 700;
@@ -51,7 +64,9 @@ const BOX_PAD = 1.1;
 interface Resolved {
   minZoom: number;
   maxZoom: number;
-  fill: number;
+  /** Inner safe-area insets (fraction of viewport) the focus rect is fit into. */
+  innerSafeX: number;
+  innerSafeY: number;
   establishLevel: number;
   panThreshold: number;
   stiffness: number;
@@ -63,9 +78,10 @@ interface Resolved {
 function resolve(z: ZoomConfig | undefined): Resolved {
   const level = z?.level ?? 1.25;
   return {
-    minZoom: z?.minZoom ?? 1.15,
-    maxZoom: z?.maxZoom ?? Math.max(1.15, level > 1.25 ? level : 1.85),
-    fill: z?.fill ?? 0.5,
+    minZoom: z?.minZoom ?? 1.0,
+    maxZoom: z?.maxZoom ?? Math.max(1.0, level > 1.25 ? level : 1.8),
+    innerSafeX: z?.innerSafeX ?? 0.1,
+    innerSafeY: z?.innerSafeY ?? 0.1,
     establishLevel: z?.establishLevel ?? 1.06,
     panThreshold: z?.panThreshold ?? 0.42,
     stiffness: z?.stiffness ?? 8,
@@ -75,20 +91,44 @@ function resolve(z: ZoomConfig | undefined): Resolved {
   };
 }
 
+// Adaptive depth: scale that fits the (padded) bbox into the inner safe area.
+// min(safeW/bw, safeH/bh) frames the rect with constant breathing room on every
+// side; clamping to [minZoom, maxZoom] caps how deep a tiny target may punch.
 function depthFor(bbox: Box, vw: number, vh: number, cfg: Resolved): number {
   const bw = Math.max(1, bbox.width * BOX_PAD);
   const bh = Math.max(1, bbox.height * BOX_PAD);
-  const s = Math.min((vw * cfg.fill) / bw, (vh * cfg.fill) / bh);
+  const safeW = vw * (1 - 2 * cfg.innerSafeX);
+  const safeH = vh * (1 - 2 * cfg.innerSafeY);
+  const s = Math.min(safeW / bw, safeH / bh);
   return clamp(s, cfg.minZoom, cfg.maxZoom);
 }
 
-function anchorFor(bbox: Box, vw: number, vh: number): Vec {
-  const cx = bbox.x + bbox.width / 2;
-  const cy = bbox.y + bbox.height / 2;
-  return {
-    x: clamp(cx, vw * SAFE_X, vw * (1 - SAFE_X)),
-    y: clamp(cy, vh * SAFE_Y, vh * (1 - SAFE_Y)),
-  };
+// The raw bbox center. Framing/clamping is deferred to `cameraTransform`, so the
+// spring is free to chase the true center (even near an edge) without the corner
+// clamping that used to fling edge elements off-screen.
+function anchorFor(bbox: Box): Vec {
+  return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
+}
+
+/**
+ * Pure: converts a sampled camera state into the transform applied to the
+ * moving content (and cursor). With transform-origin "0 0":
+ *
+ *   tx = vw/2 - focusX*s;  ty = vh/2 - focusY*s
+ *
+ * centers the focus point in the viewport. The coverage clamp then keeps
+ * [tx, tx + vw*s] ⊇ [0, vw] (and likewise y), guaranteeing the scaled content
+ * always fully covers the card. For a corner focus the clamp pins translation to
+ * its limit, framing the element as far into the corner as possible while it
+ * stays fully on-screen. scale ≥ 1 (enforced upstream) keeps the clamp valid.
+ */
+export function cameraTransform(cam: CameraState, vw: number, vh: number): CameraTransform {
+  const s = cam.scale;
+  let tx = vw / 2 - cam.focusX * s;
+  let ty = vh / 2 - cam.focusY * s;
+  tx = clamp(tx, -vw * (s - 1), 0);
+  ty = clamp(ty, -vh * (s - 1), 0);
+  return { tx, ty, scale: s };
 }
 
 /** A group resolved into its camera shot: focus window, anchor and depth. */
@@ -137,7 +177,7 @@ function buildShots(timeline: Timeline, groups: ActionGroup[], cfg: Resolved): S
     return {
       focusStart,
       focusEnd: Math.max(focusEnd, g.tEnd),
-      anchor: anchorFor(g.bbox, vw, vh),
+      anchor: anchorFor(g.bbox),
       level: depthFor(g.bbox, vw, vh, cfg),
     };
   });
@@ -183,7 +223,7 @@ function targetAt(
 ): CameraState {
   for (const s of shots) {
     if (t >= s.focusStart && t <= s.focusEnd) {
-      return { scale: s.level, originX: s.anchor.x, originY: s.anchor.y };
+      return { scale: s.level, focusX: s.anchor.x, focusY: s.anchor.y };
     }
   }
   for (const g of gaps) {
@@ -197,14 +237,14 @@ function targetAt(
         const dome = Math.sin(Math.PI * u); // 0 → 1 → 0
         const base = lerp(g.from.level, g.to.level, u);
         const scale = lerp(base, cfg.establishLevel, dome);
-        return { scale, originX: ax, originY: ay };
+        return { scale, focusX: ax, focusY: ay };
       }
       // Near: stay zoomed and pan — morph depth and anchor together.
-      return { scale: lerp(g.from.level, g.to.level, u), originX: ax, originY: ay };
+      return { scale: lerp(g.from.level, g.to.level, u), focusX: ax, focusY: ay };
     }
   }
   // Idle (before first shot / after last): wide, centered.
-  return { scale: 1, originX: cx, originY: cy };
+  return { scale: 1, focusX: cx, focusY: cy };
 }
 
 /** Simulates the spring once and returns a uniform per-frame keyframe track. */
@@ -245,11 +285,11 @@ export function computeCameraTrack(timeline: Timeline, fps: number): CameraTrack
       const dt = Math.min(subDt, frameT - simT);
       const tgt = targetAt(simT * 1000, shots, gaps, cfg, cx, cy);
       [s, vs] = step(s, vs, tgt.scale, dt);
-      [x, vx] = step(x, vx, tgt.originX, dt);
-      [y, vy] = step(y, vy, tgt.originY, dt);
+      [x, vx] = step(x, vx, tgt.focusX, dt);
+      [y, vy] = step(y, vy, tgt.focusY, dt);
       simT += dt;
     }
-    frames.push({ scale: Math.max(1, s), originX: x, originY: y });
+    frames.push({ scale: Math.max(1, s), focusX: x, focusY: y });
   }
 
   return { fps, frames, cursorScale: cfg.cursorScale };
@@ -258,7 +298,7 @@ export function computeCameraTrack(timeline: Timeline, fps: number): CameraTrack
 /** Samples the precomputed camera track at time `tMs` (linear between frames). */
 export function cameraAt(track: CameraTrack, tMs: number): CameraState {
   const { frames, fps } = track;
-  if (frames.length === 0) return { scale: 1, originX: 0, originY: 0 };
+  if (frames.length === 0) return { scale: 1, focusX: 0, focusY: 0 };
   const idx = (tMs / 1000) * fps;
   if (idx <= 0) return frames[0];
   if (idx >= frames.length - 1) return frames[frames.length - 1];
@@ -268,8 +308,8 @@ export function cameraAt(track: CameraTrack, tMs: number): CameraState {
   const b = frames[i + 1];
   return {
     scale: lerp(a.scale, b.scale, u),
-    originX: lerp(a.originX, b.originX, u),
-    originY: lerp(a.originY, b.originY, u),
+    focusX: lerp(a.focusX, b.focusX, u),
+    focusY: lerp(a.focusY, b.focusY, u),
   };
 }
 
