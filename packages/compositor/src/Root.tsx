@@ -18,6 +18,7 @@ export const RemotionRoot: React.FC = () => {
         zoomOnClick: true,
         captions: true,
         framed: true,
+        background: undefined,
       } satisfies DemoCompositionProps}
       // Real dimensions/duration come from the timeline via calculateMetadata.
       durationInFrames={30}
@@ -26,12 +27,9 @@ export const RemotionRoot: React.FC = () => {
       height={emptyFramed.height}
       calculateMetadata={({ props }) => {
         const fps = props.fps ?? 30;
-        // Framing adds padding around the video, so the composition is larger
-        // than the recording. Overlays still use video-pixel coordinates.
-        const dims =
-          props.framed ?? true
-            ? framedSize(props.timeline.width, props.timeline.height)
-            : { width: props.timeline.width, height: props.timeline.height };
+        // Framed output is a fixed 16:9 1080p canvas; unframed matches the
+        // recording. Overlays still use video-pixel coordinates either way.
+        const dims = framedSize(props.timeline.width, props.timeline.height, props.framed ?? true);
         return {
           fps,
           width: dims.width,
