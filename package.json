@@ -16,7 +16,8 @@
     "mcp": "pnpm --filter @demopilot/mcp-server start",
     "demopilot": "pnpm --filter @demopilot/mcp-server cli",
     "seed-app": "pnpm --filter @demopilot/examples serve",
-    "render:example": "pnpm --filter @demopilot/mcp-server render:example"
+    "render:example": "pnpm --filter @demopilot/mcp-server render:example",
+    "generate:skill-docs": "tsx scripts/generate-skill-docs.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
