@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, OffthreadVideo, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import type { DemoCompositionProps } from "./types";
 import { cursorAt, clickPulseAt, captionAt, contentStartMs } from "./interp";
-import { computeCameraTrack, cameraAt } from "./camera";
+import { computeCameraTrack, cameraAt, cameraTransform } from "./camera";
 import { Cursor } from "./Cursor";
 import { FRAME, CANVAS, backgroundFor, cardLayout } from "./frame";
 
@@ -44,7 +44,11 @@ export const Demo: React.FC<DemoCompositionProps> = ({
 
   const cursor = cursorAt(timeline.cursor, tMs);
   const pulse = clickPulseAt(timeline, tMs);
-  const cam = zoomOnClick ? cameraAt(track, tMs) : { scale: 1, originX: vw / 2, originY: vh / 2 };
+  const cam = zoomOnClick ? cameraAt(track, tMs) : { scale: 1, focusX: vw / 2, focusY: vh / 2 };
+  // Fit-to-rect transform with a coverage clamp: the scaled content always fully
+  // covers the card (no background bleed) and edge/corner elements are framed as
+  // far into the corner as geometry allows instead of being clipped.
+  const view = cameraTransform(cam, vw, vh);
   const caption = captions ? captionAt(timeline, tMs) : null;
 
   // Card placement: fit the recording into the padded canvas (framed) or fill it.
@@ -63,12 +67,13 @@ export const Demo: React.FC<DemoCompositionProps> = ({
 
   // One camera transform, applied identically to the video group and the cursor
   // group (which is *outside* the rounded clip so the cursor tip is never cut).
+  // transform-origin "0 0" so the translate/scale math in `cameraTransform` holds.
   const camStyle: React.CSSProperties = {
     position: "absolute",
     width: vw,
     height: vh,
-    transform: `scale(${cam.scale})`,
-    transformOrigin: `${cam.originX}px ${cam.originY}px`,
+    transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
+    transformOrigin: "0 0",
   };
 
   return (

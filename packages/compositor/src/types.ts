@@ -50,7 +50,11 @@ export interface ZoomConfig {
   clickBoost?: number;
   minZoom?: number;
   maxZoom?: number;
+  /** @deprecated Superseded by the inner safe-area fit (innerSafeX/innerSafeY). */
   fill?: number;
+  /** Inner safe-area insets (fraction of viewport) the focus rect is fit into. */
+  innerSafeX?: number;
+  innerSafeY?: number;
   establishLevel?: number;
   panThreshold?: number;
   stiffness?: number;
