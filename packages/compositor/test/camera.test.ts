@@ -75,7 +75,7 @@ describe("adaptive depth", () => {
     const dLarge = groupDepth(buildActionGroups(large, 1800)[0], large);
     expect(dSmall).toBeGreaterThan(dLarge);
     // Small target saturates at the max; large region stays shallow.
-    expect(dSmall).toBeCloseTo(1.8, 1);
+    expect(dSmall).toBeCloseTo(1.55, 1);
     expect(dLarge).toBeLessThan(1.4);
   });
 });
@@ -119,18 +119,33 @@ describe("camera transitions", () => {
     expect(cameraAt(track, 3750).scale).toBeGreaterThan(1.4);
   });
 
-  it("eases out to an establishing shot between two far groups", () => {
+  it("eases out gently between two far groups but stays in the app context", () => {
     const tl = timeline([
       { kind: "click", t: 1500, x: 200, y: 400, button: "left", bbox: box(170, 380, 60, 40), container: "a" },
       { kind: "click", t: 6000, x: 1120, y: 400, button: "left", bbox: box(1090, 380, 60, 40), container: "b" },
     ]);
     const track = computeCameraTrack(tl, FPS);
-    const hold = cameraAt(track, 1600).scale;
-    // Sample across the gap and confirm the depth dips well below the group hold.
+    const hold = cameraAt(track, 1700).scale;
     let minScale = Infinity;
     for (let t = 2200; t <= 5300; t += 100) minScale = Math.min(minScale, cameraAt(track, t).scale);
-    expect(minScale).toBeLessThan(hold - 0.2);
-    expect(minScale).toBeLessThan(1.4);
+    // It does pull back from the group hold (a visible establishing beat)…
+    expect(minScale).toBeLessThan(hold - 0.1);
+    // …but only modestly — it never zooms (nearly) all the way out to a wide
+    // "reset" shot; the camera holds the app shell while it glides across.
+    expect(minScale).toBeGreaterThan(1.2);
+  });
+
+  it("lands on a gentle pull-back after the last shot (no full zoom-out outro)", () => {
+    const tl = timeline(
+      [{ kind: "click", t: 1500, x: 640, y: 400, button: "left", bbox: box(610, 380, 60, 40), container: "a" }],
+      { durationMs: 6000 },
+    );
+    const track = computeCameraTrack(tl, FPS);
+    // Well after the action settles, the camera holds a gentle landing framing —
+    // pulled back from the hold, but not a full zoom-out to wide (scale 1).
+    const ending = cameraAt(track, 5800).scale;
+    expect(ending).toBeGreaterThan(1.05);
+    expect(ending).toBeLessThan(1.3);
   });
 });
 
@@ -205,7 +220,11 @@ describe("cameraSpeedAt (synthetic motion-blur driver)", () => {
     const farTrack = computeCameraTrack(far, 60);
     let maxSpeed = 0;
     for (let t = 2200; t <= 5300; t += 50) maxSpeed = Math.max(maxSpeed, cameraSpeedAt(farTrack, t, 1280, 800));
-    expect(maxSpeed).toBeGreaterThan(15);
+    // The transition moves several × faster than a settled hold (drives blur).
+    // It's deliberately calmer than the old hard zoom-out (gentler establishing
+    // pull-back), so the bar is "clearly moving", not "violently moving".
+    expect(maxSpeed).toBeGreaterThan(6);
+    expect(maxSpeed).toBeGreaterThan(hold * 4);
   });
 });
 

@@ -4,23 +4,17 @@ baseUrl: http://localhost:4321
 viewport:
   width: 1280
   height: 800
-defaults:
-  typeCadence: human
-  mousePace: natural
-  # Pacing knobs (milliseconds). These are the calibrated, unhurried defaults,
-  # shown explicitly so they're easy to tune per demo.
-  preActionDwell: 450 # beat after the cursor arrives on a target, before it acts
-  postActionHold: 650 # beat after a click/type so the result stays readable
-  readPause: 900 # reading pause after each navigation (goto or client-side)
-  # Global pace multiplier: 1 = these defaults, >1 plays faster, <1 slower.
-  # Scales every dwell/hold/reading pause and the mouse-travel & typing durations.
-  speed: 1.0
-  # Post-production camera (applied by the compositor). Depth is chosen
-  # automatically per action group between minZoom and maxZoom; these are the
-  # calibrated marketing defaults, shown for easy tuning.
-  zoom:
-    minZoom: 1.15
-    maxZoom: 1.85
+# This demo intentionally declares NO `defaults:` block — it runs entirely on
+# DemoPilot's built-in, content-agnostic defaults: typing/mouse pace, the
+# reading/hold pauses, and the whole auto-zoom camera (adaptive depth, gentle
+# establishing pull-backs that stay in the app context, light motion blur, and
+# the crisp outro landing). Those same defaults apply to ANY app's demo, so this
+# example doubles as a check that the defaults look good unaided. To tune a
+# specific demo, add a `defaults:` block, e.g.:
+#   defaults:
+#     speed: 1.2
+#     postActionHold: 800
+#     zoom: { minZoom: 1.1, maxZoom: 1.7 }
 steps:
   - goto: /
   - narrate: First, create your account
@@ -53,4 +47,4 @@ steps:
       target: { role: button, name: Create }
   - waitFor:
       target: { text: Marketing site }
-  - pause: 800
+  - pause: 400

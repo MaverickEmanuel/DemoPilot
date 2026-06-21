@@ -12,14 +12,14 @@ describe("DemoScript schema", () => {
     expect(script.defaults.typeCadence).toBe("human");
     expect(script.defaults.mousePace).toBe("natural");
     // Pacing knobs apply their calibrated, cinematic defaults.
-    expect(script.defaults.readPause).toBe(1100);
+    expect(script.defaults.readPause).toBe(850);
     expect(script.defaults.preActionDwell).toBe(450);
-    expect(script.defaults.postActionHold).toBe(800);
+    expect(script.defaults.postActionHold).toBe(700);
     expect(script.defaults.speed).toBe(1);
     // Camera depth has calibrated, authorable defaults (adaptive between these).
     expect(script.defaults.zoom.level).toBe(1.25);
     expect(script.defaults.zoom.minZoom).toBe(1.15);
-    expect(script.defaults.zoom.maxZoom).toBe(1.85);
+    expect(script.defaults.zoom.maxZoom).toBe(1.55);
     expect(script.defaults.zoom.cursorScale).toBe(1.5);
     // Per-click punch is gone; clickBoost is no longer defaulted.
     expect(script.defaults.zoom.clickBoost).toBeUndefined();

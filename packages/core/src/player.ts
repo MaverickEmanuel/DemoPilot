@@ -64,8 +64,9 @@ export async function playDemo(script: DemoScript, opts: PlayOptions): Promise<P
       cursor = await runStep(session.page, recorder, script, step, cursor);
     }
 
-    // Tail so the last action lingers, readable, before the cut.
-    await sleep(scale(1000));
+    // Tail so the last action lingers, readable, before the cut — kept tight so
+    // the demo lands on the result instead of dwelling on an idle final frame.
+    await sleep(scale(700));
   } finally {
     // Always close the session so the video is flushed to disk.
   }
