@@ -112,15 +112,16 @@ export const DemoDefaultsSchema = z
     typeCadence: TypeCadence.default("human"),
     mousePace: MousePace.default("natural"),
     /** Reading pause (ms) after each navigation — explicit `goto` *and* client-side
-     * (form submit / SPA route change) — before the next step runs. */
-    readPause: z.number().int().nonnegative().default(1100),
+     * (form submit / SPA route change) — before the next step runs. Tuned to keep
+     * page-load beats from turning into dead air while the camera is mid-transition. */
+    readPause: z.number().int().nonnegative().default(850),
     /** Pause (ms) after the cursor arrives on a target, before the click/type fires.
      * Reads as the cursor "taking aim", so actions don't feel instantaneous. */
     preActionDwell: z.number().int().nonnegative().default(450),
     /** Hold (ms) after a click or type completes so the result is readable before
      * the demo moves on. Tuned a touch longer than instantaneous so each action
      * group gets a beat to settle before the camera moves on (cinematic pacing). */
-    postActionHold: z.number().int().nonnegative().default(800),
+    postActionHold: z.number().int().nonnegative().default(700),
     /** Global pace multiplier (> 0). 1 = the calibrated default pace; values above 1
      * play faster (durations shrink), below 1 play slower (durations stretch). Scales
      * the dwell/hold/reading pauses, lead-in/tail, and mouse-travel & typing durations.
@@ -150,7 +151,7 @@ export const DemoDefaultsSchema = z
         /** Shallowest magnification the adaptive camera will choose (large regions). */
         minZoom: z.number().min(1).max(3).default(1.15).describe("Shallowest adaptive zoom"),
         /** Deepest magnification the adaptive camera will choose (small targets). */
-        maxZoom: z.number().min(1).max(3).default(1.85).describe("Deepest adaptive zoom"),
+        maxZoom: z.number().min(1).max(3).default(1.55).describe("Deepest adaptive zoom"),
         /** Fraction of the frame an action group's box should fill (drives depth). */
         fill: z.number().min(0.2).max(1).default(0.62).describe("Target frame fill for a group"),
         /** Magnification held during a zoom-out handoff between far-apart groups. */
