@@ -1,6 +1,6 @@
 import type { Locator } from "playwright";
 import type { TypeCadence } from "../schema.js";
-import type { TimelineRecorder } from "../timeline.js";
+import type { TimelineRecorder, TargetGeometry } from "../timeline.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -20,6 +20,7 @@ export async function typeText(
   text: string,
   cadence: TypeCadence,
   speed = 1,
+  geom?: TargetGeometry,
 ): Promise<void> {
   await locator.click();
   const { base, jitter } = CADENCE[cadence];
@@ -41,5 +42,5 @@ export async function typeText(
     }
   }
 
-  recorder.type(text, tStart);
+  recorder.type(text, tStart, geom);
 }
