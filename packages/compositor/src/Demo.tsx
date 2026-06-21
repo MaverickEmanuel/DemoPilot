@@ -1,13 +1,35 @@
 import React from "react";
 import { AbsoluteFill, OffthreadVideo, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
-import type { DemoCompositionProps } from "./types";
-import { cursorAt, clickPulseAt, captionAt, contentStartMs } from "./interp";
-import { computeCameraTrack, cameraAt } from "./camera";
+import { CameraMotionBlur, Trail } from "@remotion/motion-blur";
+import type { CameraTrack } from "./camera";
+import type { DemoCompositionProps, Timeline } from "./types";
+import { cursorAt, clickPulseAt, cursorPressAt, captionAt, contentStartMs } from "./interp";
+import { computeCameraTrack, cameraAt, cameraTransform, cameraSpeedAt, type CameraTransform } from "./camera";
 import { Cursor } from "./Cursor";
-import { FRAME, CANVAS, backgroundFor, cardLayout } from "./frame";
+import { FRAME, CANVAS, meshBackgroundAt, cardLayout } from "./frame";
 
 /** Matches the seed app's dark background so the intro reveal is seamless. */
 const STAGE_BG = "#0a0e1a";
+
+// --- Synthetic motion blur tuning (content-agnostic; tuned by eye at 60 fps) ---
+// Camera blur: map per-frame camera speed (card-space px/frame) to a small blur.
+const CAM_BLUR_GAIN = 0.05;
+const CAM_BLUR_MAX = 7;
+// Cursor trail: ghosts along the recent path, faded by 0.5^n, gated by speed so
+// slow/precise moves stay crisp. Speed is in video px/s.
+const TRAIL_LAYERS = 4;
+const TRAIL_SPEED_LO = 1200;
+const TRAIL_SPEED_HI = 2000;
+// Sampled (high-quality) mode: re-renders children at sub-frame offsets, so
+// render cost ≈ SAMPLED_SAMPLES× the synthetic path. Opt-in only.
+const SAMPLED_SHUTTER = 180;
+const SAMPLED_SAMPLES = 8;
+
+// Cursor renders in screen-space at a constant on-screen size (decoupled from the
+// camera zoom). The SVG glyph box is 28px; on-screen canvas size ≈
+// CURSOR_BASE_PX × cursorScale, independent of zoom and card layout.
+const CURSOR_SVG_PX = 28;
+const CURSOR_BASE_PX = 24;
 
 /**
  * Composites the clean recording with a redrawn cursor, click ripples, the
@@ -16,11 +38,16 @@ const STAGE_BG = "#0a0e1a";
  * fixed 16:9 1080p canvas.
  *
  * Coordinate correctness: every overlay coordinate (cursor, ripple, camera
- * origin) is in VIDEO pixel space. The video and the cursor each live in a group
+ * focus) is in VIDEO pixel space. The video and the cursor each live in a group
  * sized to the video and carrying the *same* camera transform, so they stay
  * pixel-aligned. The card itself is scaled/positioned by a single wrapper, and
  * the camera transform lives *inside* it — so the inset/corners/shadow stay put
  * while the app content zooms and pans.
+ *
+ * Motion blur: the camera-driven content (video + cursor) is rendered by
+ * frame-reading layers so that "sampled" mode can re-render them at sub-frame
+ * offsets via @remotion/motion-blur. "synthetic" (default) instead derives a
+ * cheap per-frame blur from the keyframe track and a hand-rolled cursor trail.
  */
 export const Demo: React.FC<DemoCompositionProps> = ({
   videoFile,
@@ -29,11 +56,13 @@ export const Demo: React.FC<DemoCompositionProps> = ({
   captions,
   framed = true,
   background,
+  backgroundDrift = false,
+  motionBlur = "synthetic",
+  vignette = true,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
+  const { fps } = useVideoConfig();
   const tMs = (frame / fps) * 1000;
-  const durationMs = (durationInFrames / fps) * 1000;
 
   const vw = timeline.width;
   const vh = timeline.height;
@@ -42,37 +71,44 @@ export const Demo: React.FC<DemoCompositionProps> = ({
   // The spring camera track is simulated once and sampled per frame.
   const track = React.useMemo(() => computeCameraTrack(timeline, fps), [timeline, fps]);
 
-  const cursor = cursorAt(timeline.cursor, tMs);
-  const pulse = clickPulseAt(timeline, tMs);
-  const cam = zoomOnClick ? cameraAt(track, tMs) : { scale: 1, originX: vw / 2, originY: vh / 2 };
   const caption = captions ? captionAt(timeline, tMs) : null;
 
   // Card placement: fit the recording into the padded canvas (framed) or fill it.
   const canvasW = framed ? CANVAS.width : vw;
   const canvasH = framed ? CANVAS.height : vh;
-  const layout = framed
-    ? cardLayout(canvasW, canvasH, vw, vh)
-    : { scale: 1, left: 0, top: 0 };
+  const layout = framed ? cardLayout(canvasW, canvasH, vw, vh) : { scale: 1, left: 0, top: 0 };
 
-  // Hide the browser's blank startup page (a white flash) before the first
-  // paint, then reveal the content with a short fade.
-  const contentStart = contentStartMs(timeline);
-  const introCover = 1 - clamp01((tMs - (contentStart + 100)) / 240);
-  // Gentle fade-out at the very end.
-  const outro = clamp01((tMs - (durationMs - 300)) / 300);
+  const sampled = motionBlur === "sampled";
+  const syntheticBlur = motionBlur === "synthetic";
 
-  // One camera transform, applied identically to the video group and the cursor
-  // group (which is *outside* the rounded clip so the cursor tip is never cut).
-  const camStyle: React.CSSProperties = {
-    position: "absolute",
-    width: vw,
-    height: vh,
-    transform: `scale(${cam.scale})`,
-    transformOrigin: `${cam.originX}px ${cam.originY}px`,
-  };
+  const videoLayer = (
+    <VideoLayer
+      videoFile={videoFile}
+      timeline={timeline}
+      track={track}
+      zoomOnClick={zoomOnClick}
+      vw={vw}
+      vh={vh}
+      syntheticBlur={syntheticBlur}
+    />
+  );
+  const cursorLayer = (
+    <CursorLayer
+      timeline={timeline}
+      track={track}
+      zoomOnClick={zoomOnClick}
+      vw={vw}
+      vh={vh}
+      syntheticBlur={syntheticBlur}
+      trail={syntheticBlur}
+      layoutScale={layout.scale}
+    />
+  );
 
   return (
-    <AbsoluteFill style={{ background: framed ? backgroundFor(background) : STAGE_BG }}>
+    <AbsoluteFill
+      style={{ background: framed ? meshBackgroundAt(background, tMs / 1000, backgroundDrift) : STAGE_BG }}
+    >
       {/* Card wrapper: scales the video-space card into the canvas and centers it.
           Everything inside works in video pixels. */}
       <div
@@ -98,34 +134,37 @@ export const Demo: React.FC<DemoCompositionProps> = ({
         >
           {/* Rounded clip: rounds the video's corners. The camera lives inside it. */}
           <div style={{ position: "absolute", inset: 0, borderRadius: radius, overflow: "hidden" }}>
-            <div style={camStyle}>
-              <OffthreadVideo src={staticFile(videoFile)} style={{ width: vw, height: vh, display: "block" }} />
-
-              {pulse && <Ripple x={pulse.x} y={pulse.y} progress={pulse.progress} />}
-
-              {/* Intro/outro covers sit over the video only, so the framed card and
-                  its shadow stay visible during the reveal and fade. */}
-              {introCover > 0 && (
-                <div style={{ position: "absolute", inset: 0, backgroundColor: STAGE_BG, opacity: introCover }} />
-              )}
-              {outro > 0 && (
-                <div style={{ position: "absolute", inset: 0, backgroundColor: STAGE_BG, opacity: outro }} />
-              )}
-            </div>
+            {sampled ? (
+              <CameraMotionBlur shutterAngle={SAMPLED_SHUTTER} samples={SAMPLED_SAMPLES}>
+                {videoLayer}
+              </CameraMotionBlur>
+            ) : (
+              videoLayer
+            )}
           </div>
 
           {/* Cursor: same camera transform, but outside the rounded clip so its tip
               is never clipped by the corner radius. */}
-          <div style={{ ...camStyle, pointerEvents: "none" }}>
-            <Cursor
-              x={cursor.x}
-              y={cursor.y}
-              scale={track.cursorScale}
-              pressing={pulse !== null && pulse.progress < 0.32}
-            />
-          </div>
+          {sampled ? (
+            <Trail layers={TRAIL_LAYERS} lagInFrames={1} trailOpacity={0.5}>
+              {cursorLayer}
+            </Trail>
+          ) : (
+            cursorLayer
+          )}
         </div>
       </div>
+
+      {/* A subtle edge vignette adds depth — darkens the canvas corners slightly,
+          below the captions so text stays crisp. */}
+      {vignette && (
+        <AbsoluteFill
+          style={{
+            pointerEvents: "none",
+            background: "radial-gradient(125% 125% at 50% 50%, transparent 58%, rgba(0,0,0,0.16) 100%)",
+          }}
+        />
+      )}
 
       {caption && (
         <div
@@ -159,6 +198,141 @@ export const Demo: React.FC<DemoCompositionProps> = ({
     </AbsoluteFill>
   );
 };
+
+/** The camera transform as a style for a video-sized group (transform-origin 0 0
+ * so the translate/scale math in `cameraTransform` holds). */
+function camGroupStyle(view: CameraTransform, vw: number, vh: number): React.CSSProperties {
+  return {
+    position: "absolute",
+    width: vw,
+    height: vh,
+    transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.scale})`,
+    transformOrigin: "0 0",
+  };
+}
+
+interface LayerProps {
+  timeline: Timeline;
+  track: CameraTrack;
+  zoomOnClick: boolean;
+  vw: number;
+  vh: number;
+  syntheticBlur: boolean;
+}
+
+/** Per-frame camera-driven view + synthetic camera blur (0 when not applicable). */
+function useCameraView(props: Pick<LayerProps, "track" | "zoomOnClick" | "vw" | "vh" | "syntheticBlur">) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const tMs = (frame / fps) * 1000;
+  const { track, zoomOnClick, vw, vh, syntheticBlur } = props;
+  const cam = zoomOnClick ? cameraAt(track, tMs) : { scale: 1, focusX: vw / 2, focusY: vh / 2 };
+  const view = cameraTransform(cam, vw, vh);
+  // Only the real camera produces motion; with zoom off the view is the identity.
+  const blurPx =
+    syntheticBlur && zoomOnClick
+      ? clamp(cameraSpeedAt(track, tMs, vw, vh) * CAM_BLUR_GAIN, 0, CAM_BLUR_MAX)
+      : 0;
+  return { tMs, fps, view, blurPx };
+}
+
+const blurFilter = (px: number): string | undefined => (px > 0.05 ? `blur(${px}px)` : undefined);
+
+/** The video group: the recording, the click ripple, and the intro/outro covers,
+ * all under the camera transform (and an optional synthetic camera blur). */
+const VideoLayer: React.FC<LayerProps & { videoFile: string }> = ({
+  videoFile,
+  timeline,
+  track,
+  zoomOnClick,
+  vw,
+  vh,
+  syntheticBlur,
+}) => {
+  const { tMs, fps, view, blurPx } = useCameraView({ track, zoomOnClick, vw, vh, syntheticBlur });
+  const { durationInFrames } = useVideoConfig();
+  const durationMs = (durationInFrames / fps) * 1000;
+  const pulse = clickPulseAt(timeline, tMs);
+
+  // Hide the browser's blank startup page (a white flash) before the first paint,
+  // then reveal the content with a short fade; gentle fade-out at the very end.
+  const contentStart = contentStartMs(timeline);
+  const introCover = 1 - clamp01((tMs - (contentStart + 100)) / 240);
+  const outro = clamp01((tMs - (durationMs - 300)) / 300);
+
+  return (
+    <div style={{ ...camGroupStyle(view, vw, vh), filter: blurFilter(blurPx) }}>
+      <OffthreadVideo src={staticFile(videoFile)} style={{ width: vw, height: vh, display: "block" }} />
+
+      {pulse && <Ripple x={pulse.x} y={pulse.y} progress={pulse.progress} />}
+
+      {introCover > 0 && (
+        <div style={{ position: "absolute", inset: 0, backgroundColor: STAGE_BG, opacity: introCover }} />
+      )}
+      {outro > 0 && (
+        <div style={{ position: "absolute", inset: 0, backgroundColor: STAGE_BG, opacity: outro }} />
+      )}
+    </div>
+  );
+};
+
+/** The cursor group: the live cursor plus, in synthetic mode, a speed-gated trail
+ * of fading ghosts sampled along the recent Catmull-Rom path.
+ *
+ * The cursor lives in SCREEN space — only its position is taken through the camera
+ * (so it tracks the focused element), while the glyph stays a constant on-screen
+ * size regardless of zoom. This matches premium tools (Screen Studio/Cap), where
+ * the pointer never balloons at high zoom. */
+const CursorLayer: React.FC<LayerProps & { trail: boolean; layoutScale: number }> = ({
+  timeline,
+  track,
+  zoomOnClick,
+  vw,
+  vh,
+  syntheticBlur,
+  trail,
+  layoutScale,
+}) => {
+  const { tMs, fps, view, blurPx } = useCameraView({ track, zoomOnClick, vw, vh, syntheticBlur });
+  const frameMs = 1000 / fps;
+  const cursor = cursorAt(timeline.cursor, tMs);
+  const press = cursorPressAt(timeline, tMs);
+
+  // Project a video-space point to screen (card) space through the camera.
+  const project = (x: number, y: number) => ({ x: view.tx + x * view.scale, y: view.ty + y * view.scale });
+  // Constant on-screen size: undo the card layout scale so canvas px is fixed.
+  const glyphScale = (CURSOR_BASE_PX * track.cursorScale) / (CURSOR_SVG_PX * layoutScale);
+
+  let ghosts: React.ReactNode = null;
+  if (trail) {
+    const prev = cursorAt(timeline.cursor, Math.max(0, tMs - frameMs));
+    const speed = Math.hypot(cursor.x - prev.x, cursor.y - prev.y) / (frameMs / 1000); // px/s
+    const gate = clamp01((speed - TRAIL_SPEED_LO) / (TRAIL_SPEED_HI - TRAIL_SPEED_LO));
+    if (gate > 0) {
+      ghosts = Array.from({ length: TRAIL_LAYERS }, (_, i) => {
+        const n = i + 1;
+        const g = project(...sampleXY(timeline, tMs - n * frameMs));
+        return <Cursor key={n} x={g.x} y={g.y} scale={glyphScale} opacity={Math.pow(0.5, n) * gate} />;
+      });
+    }
+  }
+
+  const c = project(cursor.x, cursor.y);
+  return (
+    <div
+      style={{ position: "absolute", width: vw, height: vh, pointerEvents: "none", filter: blurFilter(blurPx) }}
+    >
+      {ghosts}
+      <Cursor x={c.x} y={c.y} scale={glyphScale} press={press} />
+    </div>
+  );
+};
+
+/** Cursor position at a time as a tuple, for spreading into `project`. */
+function sampleXY(timeline: Timeline, tMs: number): [number, number] {
+  const p = cursorAt(timeline.cursor, Math.max(0, tMs));
+  return [p.x, p.y];
+}
 
 /** A subtle, springy click ripple — a soft filled disc plus a thin expanding ring. */
 const Ripple: React.FC<{ x: number; y: number; progress: number }> = ({ x, y, progress }) => {
@@ -205,6 +379,10 @@ const Ripple: React.FC<{ x: number; y: number; progress: number }> = ({ x, y, pr
     </>
   );
 };
+
+function clamp(x: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, x));
+}
 
 function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));

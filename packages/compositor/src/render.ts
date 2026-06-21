@@ -20,9 +20,17 @@ export interface RenderDemoOptions {
   captions?: boolean;
   /** Present the recording as an inset, framed app card (default true). */
   framed?: boolean;
-  /** Named background preset (e.g. "midnight", "dusk", "daylight", "aurora") or
-   * a raw CSS background string. Only used when framed. */
+  /** Named background preset (e.g. "aurora-mesh", "nebula", "ember", "dawn",
+   * "mist", "spectrum", or the legacy "midnight"/"dusk"/"daylight"/"aurora") or a
+   * raw CSS background string. Only used when framed. Defaults to a mesh preset. */
   background?: string;
+  /** Subtly drift the mesh background's blobs over time (no-op for non-mesh). */
+  backgroundDrift?: boolean;
+  /** Motion blur mode. "synthetic" (default, ~1× cost) | "sampled" (samples× cost)
+   * | "off". */
+  motionBlur?: "synthetic" | "sampled" | "off";
+  /** Subtle edge vignette for depth (default true). */
+  vignette?: boolean;
   onProgress?: (ratio: number) => void;
   /**
    * Path to a Chrome/Chromium executable for Remotion to use. Defaults to
@@ -47,7 +55,7 @@ const entryPoint = fileURLToPath(new URL("./index.ts", import.meta.url));
  * Remotion drives its own bundled ffmpeg, so no system ffmpeg is required.
  */
 export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoResult> {
-  const fps = opts.fps ?? 30;
+  const fps = opts.fps ?? 60;
 
   // Remotion's <OffthreadVideo> resolves assets via staticFile() against the
   // bundle's public dir, so stage the recording there under a stable name.
@@ -65,6 +73,9 @@ export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoRes
     captions: opts.captions ?? true,
     framed: opts.framed ?? true,
     background: opts.background,
+    backgroundDrift: opts.backgroundDrift ?? false,
+    motionBlur: opts.motionBlur ?? "synthetic",
+    vignette: opts.vignette ?? true,
   };
 
   const browserExecutable = opts.browserExecutable ?? process.env.DEMOPILOT_CHROME;

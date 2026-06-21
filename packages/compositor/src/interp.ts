@@ -106,6 +106,21 @@ export function clickPulseAt(timeline: Timeline, tMs: number): ClickPulse | null
   return active;
 }
 
+/** Duration of the cursor press scale-pop. */
+const PRESS_POP_MS = 140;
+
+/** A smooth click scale-pop amount (0→1→0 over ~140 ms) at time `tMs`, peaking
+ * shortly after each click. Drives the cursor's press dip. */
+export function cursorPressAt(timeline: Timeline, tMs: number): number {
+  let pop = 0;
+  for (const e of timeline.events) {
+    if (e.kind !== "click") continue;
+    const dt = tMs - e.t;
+    if (dt >= 0 && dt <= PRESS_POP_MS) pop = Math.max(pop, Math.sin(Math.PI * (dt / PRESS_POP_MS)));
+  }
+  return pop;
+}
+
 // ----------------------------------------------------------------------------
 // Captions
 // ----------------------------------------------------------------------------
