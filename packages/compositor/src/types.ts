@@ -86,6 +86,8 @@ export interface DemoCompositionProps {
   framed: boolean;
   /** Named background preset behind the app card when framed. */
   background?: string;
+  /** Subtly drift the mesh background's blobs over time (no-op for non-mesh). */
+  backgroundDrift?: boolean;
   // Remotion requires composition props to be assignable to Record<string, unknown>.
   [key: string]: unknown;
 }

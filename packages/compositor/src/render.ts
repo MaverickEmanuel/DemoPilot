@@ -20,9 +20,12 @@ export interface RenderDemoOptions {
   captions?: boolean;
   /** Present the recording as an inset, framed app card (default true). */
   framed?: boolean;
-  /** Named background preset (e.g. "midnight", "dusk", "daylight", "aurora") or
-   * a raw CSS background string. Only used when framed. */
+  /** Named background preset (e.g. "aurora-mesh", "nebula", "ember", "dawn",
+   * "mist", "spectrum", or the legacy "midnight"/"dusk"/"daylight"/"aurora") or a
+   * raw CSS background string. Only used when framed. Defaults to a mesh preset. */
   background?: string;
+  /** Subtly drift the mesh background's blobs over time (no-op for non-mesh). */
+  backgroundDrift?: boolean;
   onProgress?: (ratio: number) => void;
   /**
    * Path to a Chrome/Chromium executable for Remotion to use. Defaults to
@@ -65,6 +68,7 @@ export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoRes
     captions: opts.captions ?? true,
     framed: opts.framed ?? true,
     background: opts.background,
+    backgroundDrift: opts.backgroundDrift ?? false,
   };
 
   const browserExecutable = opts.browserExecutable ?? process.env.DEMOPILOT_CHROME;
