@@ -21,6 +21,7 @@ export const RemotionRoot: React.FC = () => {
         background: undefined,
         backgroundDrift: false,
         motionBlur: "synthetic",
+        vignette: true,
       } satisfies DemoCompositionProps}
       // Real dimensions/duration come from the timeline via calculateMetadata.
       durationInFrames={60}
