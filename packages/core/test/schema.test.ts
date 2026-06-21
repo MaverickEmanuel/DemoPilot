@@ -11,15 +11,18 @@ describe("DemoScript schema", () => {
     expect(script.viewport).toEqual({ width: 1280, height: 800 });
     expect(script.defaults.typeCadence).toBe("human");
     expect(script.defaults.mousePace).toBe("natural");
-    // Pacing knobs apply their calibrated, unhurried defaults.
-    expect(script.defaults.readPause).toBe(900);
+    // Pacing knobs apply their calibrated, cinematic defaults.
+    expect(script.defaults.readPause).toBe(1100);
     expect(script.defaults.preActionDwell).toBe(450);
-    expect(script.defaults.postActionHold).toBe(650);
+    expect(script.defaults.postActionHold).toBe(800);
     expect(script.defaults.speed).toBe(1);
-    // Zoom intensity has a calibrated default and is authorable.
+    // Camera depth has calibrated, authorable defaults (adaptive between these).
     expect(script.defaults.zoom.level).toBe(1.25);
-    // Button clicks punch in a little deeper than typing by default.
-    expect(script.defaults.zoom.clickBoost).toBe(0.1);
+    expect(script.defaults.zoom.minZoom).toBe(1.15);
+    expect(script.defaults.zoom.maxZoom).toBe(1.85);
+    expect(script.defaults.zoom.cursorScale).toBe(1.5);
+    // Per-click punch is gone; clickBoost is no longer defaulted.
+    expect(script.defaults.zoom.clickBoost).toBeUndefined();
   });
 
   it("accepts an authored zoom level and zoom-region steps", () => {

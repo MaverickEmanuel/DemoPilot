@@ -10,20 +10,78 @@ export interface CursorSample {
   y: number;
 }
 
+/** Axis-aligned bounding box of an acted-on element, in video pixels. */
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type TimelineEvent =
   | { kind: "navigate"; t: number; url: string }
-  | { kind: "click"; t: number; x: number; y: number; button: "left" | "right" | "middle" }
-  | { kind: "type"; t: number; tStart: number; text: string }
+  | {
+      kind: "click";
+      t: number;
+      x: number;
+      y: number;
+      button: "left" | "right" | "middle";
+      /** Bounding box of the clicked element (for adaptive zoom / grouping). */
+      bbox?: Box;
+      /** Stable signature of the nearest container (form/dialog/section/…). */
+      container?: string;
+    }
+  | {
+      kind: "type";
+      t: number;
+      tStart: number;
+      text: string;
+      /** Center of the typed-into field (so the compositor needn't infer it). */
+      x?: number;
+      y?: number;
+      bbox?: Box;
+      container?: string;
+    }
   | { kind: "scroll"; t: number; x: number; y: number }
   | { kind: "narrate"; t: number; text: string }
-  | { kind: "zoom"; t: number; action: "in" | "out" };
+  | { kind: "zoom"; t: number; action: "in" | "out" }
+  /** Author-placed boundary that forces a named action group (overrides the
+   * automatic grouping heuristic). "start" opens a group, "end" closes it. */
+  | { kind: "group"; t: number; action: "start" | "end"; name?: string };
 
-/** Post-production zoom settings carried alongside the capture. */
+/** Geometry of an acted-on element, recorded alongside click/type events. */
+export interface TargetGeometry {
+  x?: number;
+  y?: number;
+  bbox?: Box;
+  container?: string;
+}
+
+/** Post-production camera/zoom settings carried alongside the capture. The
+ * field is named `zoom` for back-compat; it now drives the spring camera too. */
 export interface ZoomConfig {
-  /** Max magnification for activity zooms (1 = no zoom). */
+  /** Legacy/fallback magnification (1 = no zoom). Used when min/max are unset. */
   level: number;
-  /** Extra magnification added on top of `level` for button clicks. */
+  /** Deprecated: per-click punch is gone (clicks stay anchored to their group). */
   clickBoost?: number;
+  /** Shallowest magnification the adaptive camera will choose. */
+  minZoom?: number;
+  /** Deepest magnification the adaptive camera will choose (small targets). */
+  maxZoom?: number;
+  /** Fraction of the frame an action group's box should fill (drives depth). */
+  fill?: number;
+  /** Magnification held during a "zoom-out" handoff between far-apart groups. */
+  establishLevel?: number;
+  /** Pan vs. zoom-out threshold, as a fraction of the viewport diagonal. */
+  panThreshold?: number;
+  /** Spring angular frequency (rad/s); higher = snappier camera. */
+  stiffness?: number;
+  /** Spring damping ratio (1 = critical; <1 adds a subtle settle). */
+  damping?: number;
+  /** Max edge-to-edge gap (ms) for two actions to merge into one group. */
+  groupGapMs?: number;
+  /** Cursor magnification for visibility (1 = native size). */
+  cursorScale?: number;
 }
 
 export interface Timeline {
@@ -96,16 +154,36 @@ export class TimelineRecorder {
     this.events.push({ kind: "navigate", t, url });
   }
 
-  click(x: number, y: number, button: "left" | "right" | "middle" = "left"): void {
+  click(
+    x: number,
+    y: number,
+    button: "left" | "right" | "middle" = "left",
+    geom?: TargetGeometry,
+  ): void {
     this.sampleCursor(x, y);
-    this.events.push({ kind: "click", t: this.t(), x, y, button });
+    this.events.push({ kind: "click", t: this.t(), x, y, button, bbox: geom?.bbox, container: geom?.container });
   }
 
   /** Records a `type` event spanning [tStart, now]. When `tStart` is omitted it
-   * collapses to a point at the current time (keeps the event well-formed). */
-  type(text: string, tStart?: number): void {
+   * collapses to a point at the current time (keeps the event well-formed).
+   * `geom` carries the field's center/box so the compositor can anchor on it. */
+  type(text: string, tStart?: number, geom?: TargetGeometry): void {
     const t = this.t();
-    this.events.push({ kind: "type", t, tStart: tStart ?? t, text });
+    this.events.push({
+      kind: "type",
+      t,
+      tStart: tStart ?? t,
+      text,
+      x: geom?.x,
+      y: geom?.y,
+      bbox: geom?.bbox,
+      container: geom?.container,
+    });
+  }
+
+  /** An author-placed action-group boundary ("start"/"end"), with optional name. */
+  group(action: "start" | "end", name?: string): void {
+    this.events.push({ kind: "group", t: this.t(), action, name });
   }
 
   scroll(): void {

@@ -4,7 +4,7 @@ import { startRecording, type CaptureMode, type FfmpegLocation } from "./capture
 import { TimelineRecorder, type Timeline } from "./timeline.js";
 import { moveCursor, dwell, type Point } from "./engines/mouse.js";
 import { typeText } from "./engines/typing.js";
-import { resolveLocator, centerOf } from "./locators.js";
+import { resolveLocator, centerOf, geometryOf, toGeometry } from "./locators.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -73,9 +73,10 @@ export async function playDemo(script: DemoScript, opts: PlayOptions): Promise<P
   // Finalize the timeline first; its duration tells the screencast assembler how
   // long the clean video should be, and its t=0 anchors the frame alignment.
   const timeline = recorder.finish();
-  // Carry the resolved zoom config to the compositor (and the sidecar
-  // timeline.json) so the render's zoom intensity is authorable per demo.
-  timeline.zoom = { level: script.defaults.zoom.level, clickBoost: script.defaults.zoom.clickBoost };
+  // Carry the resolved camera/zoom config to the compositor (and the sidecar
+  // timeline.json) so the render's framing is authorable per demo. Only the keys
+  // the author set are forwarded; the compositor fills the rest with defaults.
+  timeline.zoom = { ...script.defaults.zoom };
   const videoPath = await session.finish({ alignToWall: recorder.startedAt, durationMs: timeline.durationMs });
   return { videoPath, timeline };
 }
@@ -107,11 +108,12 @@ async function runStep(
 
   if ("click" in step) {
     const locator = resolveLocator(page, step.click.target);
-    const point = await centerOf(locator);
+    const geom = await geometryOf(locator);
+    const point = geom.point;
     cursor = await moveCursor(page, recorder, cursor, point, defaults.mousePace, speed);
     // Pre-action dwell: a beat with the cursor on target before it commits.
     await dwell(scale(defaults.preActionDwell));
-    recorder.click(point.x, point.y, step.click.button ?? "left");
+    recorder.click(point.x, point.y, step.click.button ?? "left", toGeometry(geom));
     const urlBefore = page.url();
     await page.mouse.click(point.x, point.y, {
       button: step.click.button ?? "left",
@@ -123,10 +125,18 @@ async function runStep(
 
   if ("type" in step) {
     const locator = resolveLocator(page, step.type.target);
-    const point = await centerOf(locator);
+    const geom = await geometryOf(locator);
+    const point = geom.point;
     cursor = await moveCursor(page, recorder, cursor, point, defaults.mousePace, speed);
     await dwell(scale(defaults.preActionDwell));
-    await typeText(locator, recorder, step.type.text, step.type.cadence ?? defaults.typeCadence, speed);
+    await typeText(
+      locator,
+      recorder,
+      step.type.text,
+      step.type.cadence ?? defaults.typeCadence,
+      speed,
+      toGeometry(geom),
+    );
     // Post-action hold: let the typed value sit, readable, before moving on.
     await sleep(scale(defaults.postActionHold));
     return cursor;
@@ -195,6 +205,14 @@ async function runStep(
     // Post-production marker only: it has no effect on the live page, it just
     // brackets an authored zoom region for the compositor.
     recorder.zoom(step.zoom);
+    return cursor;
+  }
+
+  if ("group" in step) {
+    // Post-production marker only: brackets an authored action group so the
+    // camera holds a single anchor across the wrapped steps.
+    if (step.group === "end") recorder.group("end");
+    else recorder.group("start", step.group.name);
     return cursor;
   }
 
