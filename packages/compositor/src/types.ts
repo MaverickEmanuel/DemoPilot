@@ -50,7 +50,11 @@ export interface ZoomConfig {
   clickBoost?: number;
   minZoom?: number;
   maxZoom?: number;
+  /** @deprecated Superseded by the inner safe-area fit (innerSafeX/innerSafeY). */
   fill?: number;
+  /** Inner safe-area insets (fraction of viewport) the focus rect is fit into. */
+  innerSafeX?: number;
+  innerSafeY?: number;
   establishLevel?: number;
   panThreshold?: number;
   stiffness?: number;
@@ -82,6 +86,14 @@ export interface DemoCompositionProps {
   framed: boolean;
   /** Named background preset behind the app card when framed. */
   background?: string;
+  /** Subtly drift the mesh background's blobs over time (no-op for non-mesh). */
+  backgroundDrift?: boolean;
+  /** Motion blur for camera moves + cursor travel. "synthetic" (default) is a
+   * cheap ~1× per-frame blur + cursor trail; "sampled" uses @remotion/motion-blur
+   * (render cost ≈ samples×); "off" disables it. */
+  motionBlur?: "synthetic" | "sampled" | "off";
+  /** Subtle edge vignette for depth (default true). */
+  vignette?: boolean;
   // Remotion requires composition props to be assignable to Record<string, unknown>.
   [key: string]: unknown;
 }

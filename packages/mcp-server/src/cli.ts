@@ -42,14 +42,15 @@ Usage:
 Options:
   -o, --out <file.mp4>   Output path (default: renders/<script-name>.mp4)
   -s, --speed <n>        Global pace multiplier (>1 faster, <1 slower)
-      --fps <n>          Output frame rate (default 30)
+      --fps <n>          Output frame rate (default 60)
       --no-zoom          Disable the subtle zoom-toward-cursor
       --no-captions      Disable narration captions
       --no-frame         Disable the framed app-card presentation (full-bleed)
-      --background <b>    Background preset (midnight|dusk|daylight|aurora) or a
-                         raw CSS background string
-      --zoom-min <n>     Shallowest adaptive zoom (default 1.15)
-      --zoom-max <n>     Deepest adaptive zoom for small targets (default 1.85)
+      --background <b>    Background preset (aurora-mesh|nebula|ember|dawn|mist|
+                         spectrum|midnight|dusk|daylight|aurora) or a raw CSS
+                         background string
+      --zoom-min <n>     Shallowest adaptive zoom (default 1.0)
+      --zoom-max <n>     Deepest adaptive zoom for small targets (default 1.8)
       --spring <n>       Camera spring frequency in rad/s (default 8; higher=snappier)
       --pan-threshold <n> Pan vs. zoom-out cutoff, fraction of the diagonal (default 0.42)
       --headed           Run the capture browser headed (default: headless)

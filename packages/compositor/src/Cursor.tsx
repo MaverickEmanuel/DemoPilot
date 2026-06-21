@@ -1,15 +1,17 @@
 import React from "react";
 
 /** A macOS-style arrow cursor drawn as an SVG, positioned at (x, y). `scale`
- * enlarges the glyph for visibility (the press dip is layered on top). */
-export const Cursor: React.FC<{ x: number; y: number; pressing?: boolean; scale?: number }> = ({
-  x,
-  y,
-  pressing,
-  scale = 1,
-}) => {
+ * enlarges the glyph for visibility. `press` (0..1) is a smooth click scale-pop
+ * (dips the glyph ~15%). `opacity` fades synthetic motion-trail ghosts. */
+export const Cursor: React.FC<{
+  x: number;
+  y: number;
+  press?: number;
+  scale?: number;
+  opacity?: number;
+}> = ({ x, y, press = 0, scale = 1, opacity = 1 }) => {
   // A small dip on press reads as a click without distracting from the motion.
-  const press = (pressing ? 0.86 : 1) * scale;
+  const glyphScale = (1 - 0.15 * press) * scale;
   return (
     <svg
       width={28}
@@ -21,9 +23,10 @@ export const Cursor: React.FC<{ x: number; y: number; pressing?: boolean; scale?
         top: y,
         // The hotspot is the tip of the arrow (top-left of the glyph); keep it
         // fixed while the glyph scales on press / for visibility.
-        transform: `translate(-2px, -2px) scale(${press})`,
+        transform: `translate(-2px, -2px) scale(${glyphScale})`,
         transformOrigin: "2px 2px",
         filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.35))",
+        opacity,
         pointerEvents: "none",
       }}
     >

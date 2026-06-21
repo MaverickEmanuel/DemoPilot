@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildActionGroups } from "../src/groups";
-import { computeCameraTrack, cameraAt, groupDepth } from "../src/camera";
+import { computeCameraTrack, cameraAt, cameraTransform, cameraSpeedAt, groupDepth } from "../src/camera";
+import { cardLayout, CANVAS, FRAME } from "../src/frame";
 import type { Timeline, Box } from "../src/types";
 
 const FPS = 30;
@@ -73,8 +74,8 @@ describe("adaptive depth", () => {
     const dSmall = groupDepth(buildActionGroups(small, 1800)[0], small);
     const dLarge = groupDepth(buildActionGroups(large, 1800)[0], large);
     expect(dSmall).toBeGreaterThan(dLarge);
-    // Small target saturates near the max; large region stays shallow.
-    expect(dSmall).toBeCloseTo(1.85, 1);
+    // Small target saturates at the max; large region stays shallow.
+    expect(dSmall).toBeCloseTo(1.8, 1);
     expect(dLarge).toBeLessThan(1.4);
   });
 });
@@ -102,8 +103,8 @@ describe("camera (login)", () => {
 
   it("anchors on the form, not on the submit button", () => {
     const track = computeCameraTrack(login(), FPS);
-    // Anchor stays near the form center (x≈640) rather than jumping to the button (x≈520).
-    expect(cameraAt(track, 5200).originX).toBeGreaterThan(600);
+    // Focus stays near the form center (x≈640) rather than jumping to the button (x≈520).
+    expect(cameraAt(track, 5200).focusX).toBeGreaterThan(600);
   });
 });
 
@@ -130,5 +131,95 @@ describe("camera transitions", () => {
     for (let t = 2200; t <= 5300; t += 100) minScale = Math.min(minScale, cameraAt(track, t).scale);
     expect(minScale).toBeLessThan(hold - 0.2);
     expect(minScale).toBeLessThan(1.4);
+  });
+});
+
+describe("cameraTransform (fit-to-rect, edge-clamped)", () => {
+  const VW = 1280;
+  const VH = 800;
+
+  // Content spans [tx, tx + vw*scale]; it fully covers [0, vw] iff the left edge
+  // is at/past 0 and the right edge is at/before vw — i.e. no background bleed.
+  const covers = (t: number, span: number, scale: number) => t <= 1e-6 && t + span * scale >= span - 1e-6;
+
+  it("never lets content escape the card, even for corner focus at max zoom", () => {
+    const maxZoom = 1.8;
+    // Sweep every corner and the bare edges/center — the worst cases for bleed.
+    const fracs = [0, 0.5, 1];
+    for (const fx of fracs) {
+      for (const fy of fracs) {
+        const { tx, ty, scale } = cameraTransform(
+          { scale: maxZoom, focusX: VW * fx, focusY: VH * fy },
+          VW,
+          VH,
+        );
+        expect(covers(tx, VW, scale)).toBe(true);
+        expect(covers(ty, VH, scale)).toBe(true);
+        // The clamp pins translation within its valid coverage range.
+        expect(tx).toBeGreaterThanOrEqual(-VW * (scale - 1) - 1e-6);
+        expect(tx).toBeLessThanOrEqual(1e-6);
+      }
+    }
+  });
+
+  it("holds the coverage invariant across arbitrary focus points and zoom levels", () => {
+    for (let scale = 1; scale <= 1.8; scale += 0.2) {
+      for (let fx = -200; fx <= VW + 200; fx += 160) {
+        for (let fy = -200; fy <= VH + 200; fy += 160) {
+          const { tx, ty } = cameraTransform({ scale, focusX: fx, focusY: fy }, VW, VH);
+          expect(covers(tx, VW, scale)).toBe(true);
+          expect(covers(ty, VH, scale)).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("centers a centered target exactly", () => {
+    const scale = 1.5;
+    const { tx, ty } = cameraTransform({ scale, focusX: VW / 2, focusY: VH / 2 }, VW, VH);
+    // The focus point maps to the viewport center under translate+scale.
+    expect(tx + (VW / 2) * scale).toBeCloseTo(VW / 2, 6);
+    expect(ty + (VH / 2) * scale).toBeCloseTo(VH / 2, 6);
+  });
+
+  it("is the identity at scale 1 (no pan when not zoomed)", () => {
+    const { tx, ty, scale } = cameraTransform({ scale: 1, focusX: 100, focusY: 700 }, VW, VH);
+    expect(tx).toBeCloseTo(0, 6);
+    expect(ty).toBeCloseTo(0, 6);
+    expect(scale).toBe(1);
+  });
+});
+
+describe("cameraSpeedAt (synthetic motion-blur driver)", () => {
+  it("is ~0 on a settled hold and large during a transition", () => {
+    // Settled hold: one steady group, sampled deep into the hold.
+    const loginTrack = computeCameraTrack(login(), 60);
+    const hold = cameraSpeedAt(loginTrack, 4800, 1280, 800);
+    expect(hold).toBeLessThan(2);
+
+    // Far transition: the camera eases out + pans across the frame.
+    const far = timeline([
+      { kind: "click", t: 1500, x: 200, y: 400, button: "left", bbox: box(170, 380, 60, 40), container: "a" },
+      { kind: "click", t: 6000, x: 1120, y: 400, button: "left", bbox: box(1090, 380, 60, 40), container: "b" },
+    ]);
+    const farTrack = computeCameraTrack(far, 60);
+    let maxSpeed = 0;
+    for (let t = 2200; t <= 5300; t += 50) maxSpeed = Math.max(maxSpeed, cameraSpeedAt(farTrack, t, 1280, 800));
+    expect(maxSpeed).toBeGreaterThan(15);
+  });
+});
+
+describe("card layout (constant outer padding)", () => {
+  it("places the card the same regardless of zoom (camera lives inside the card)", () => {
+    // The card layout is a pure function of canvas/video dims + pad — it has no
+    // zoom input, so the outer padding is constant for the entire render.
+    const a = cardLayout(CANVAS.width, CANVAS.height, 1280, 800);
+    const b = cardLayout(CANVAS.width, CANVAS.height, 1280, 800);
+    expect(a).toEqual(b);
+    // Centered with equal margins; the card never bleeds past the canvas.
+    expect(a.left).toBeCloseTo((CANVAS.width - 1280 * a.scale) / 2, 6);
+    expect(a.top).toBeCloseTo((CANVAS.height - 800 * a.scale) / 2, 6);
+    expect(a.left).toBeGreaterThanOrEqual(FRAME.pad - 1e-6);
+    expect(a.top).toBeGreaterThanOrEqual(FRAME.pad - 1e-6);
   });
 });

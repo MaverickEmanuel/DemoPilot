@@ -28,6 +28,9 @@ importers:
       '@remotion/bundler':
         specifier: ^4.0.250
         version: 4.0.481(postcss@8.5.15)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@remotion/motion-blur':
+        specifier: 4.0.481
+        version: 4.0.481(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@remotion/renderer':
         specifier: ^4.0.250
         version: 4.0.481(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -543,6 +546,12 @@ packages:
 
   '@remotion/media-utils@4.0.481':
     resolution: {integrity: sha512-uHO8WY7vIMfTK9qc/Q8cbkUCCDQSLWrBb0OA1QBLuV0yhmutcevEnrkI4YeGZ2EqXq6RyTbXFIbLG6kU+hzCTw==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
+
+  '@remotion/motion-blur@4.0.481':
+    resolution: {integrity: sha512-BGYollxZw8f8rdXKupGEct1InSgNTNras2uwXOnfdbsp1W7D4cPyH6JIEv7Hsc1aagEWuXb2Uj6L2JJNnJPdLQ==}
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
@@ -2224,13 +2233,13 @@ snapshots:
       '@remotion/timeline-utils': 4.0.481
       '@rspack/core': 1.7.11
       '@rspack/plugin-react-refresh': 1.6.1(react-refresh@0.18.0)
-      css-loader: 7.1.4(@rspack/core@1.7.11)(webpack@5.105.0(postcss@8.5.15))
+      css-loader: 7.1.4(@rspack/core@1.7.11)(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.15))
       esbuild: 0.28.1
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       react-refresh: 0.18.0
       remotion: 4.0.481(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      style-loader: 4.0.0(webpack@5.105.0(postcss@8.5.15))
+      style-loader: 4.0.0(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.15))
       webpack: 5.105.0(esbuild@0.28.1)(postcss@8.5.15)
     transitivePeerDependencies:
       - '@minify-html/node'
@@ -2318,6 +2327,12 @@ snapshots:
   '@remotion/media-utils@4.0.481(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       mediabunny: 1.47.0
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      remotion: 4.0.481(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+
+  '@remotion/motion-blur@4.0.481(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       remotion: 4.0.481(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -2842,7 +2857,7 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-  css-loader@7.1.4(@rspack/core@1.7.11)(webpack@5.105.0(postcss@8.5.15)):
+  css-loader@7.1.4(@rspack/core@1.7.11)(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.15)):
     dependencies:
       icss-utils: 5.1.0(postcss@8.5.15)
       postcss: 8.5.15
@@ -3513,7 +3528,7 @@ snapshots:
 
   strip-final-newline@2.0.0: {}
 
-  style-loader@4.0.0(webpack@5.105.0(postcss@8.5.15)):
+  style-loader@4.0.0(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.15)):
     dependencies:
       webpack: 5.105.0(esbuild@0.28.1)(postcss@8.5.15)
 
