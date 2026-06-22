@@ -17,7 +17,9 @@
     "demopilot": "pnpm --filter @demopilot/mcp-server cli",
     "seed-app": "pnpm --filter @demopilot/examples serve",
     "render:example": "pnpm --filter @demopilot/mcp-server render:example",
-    "generate:skill-docs": "tsx scripts/generate-skill-docs.ts"
+    "generate:skill-docs": "tsx scripts/generate-skill-docs.ts",
+    "build:dist": "node scripts/build-dist.mjs",
+    "pack:dist": "node scripts/build-dist.mjs && npm pack ./dist-package"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

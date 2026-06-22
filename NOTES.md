@@ -135,3 +135,47 @@ against the script's own baseUrl; prints the MP4 path to stdout (logs to stderr)
 `.timeline.json` sidecar. Wired as the `demopilot` bin + `pnpm demopilot` script; paths resolve
 against `INIT_CWD`. Verified end-to-end against the seed app (speed override, --no-frame,
 error handling, full screencast+framing stack).
+
+---
+
+# Audio — working notes
+
+Music bed + click SFX **by default**, TTS voiceover **opt-in** behind an API key.
+All muxed with Remotion's bundled ffmpeg (no system ffmpeg). New module
+`packages/compositor/src/audio.ts`; options thread `render.ts → tools.ts → cli.ts`
+the same way `background`/`vignette` do (render options, not script-schema fields,
+so no skill-docs regen). Defaults: `music: "calm"`, `musicVolume: 0.16`, `sfx: true`,
+`voiceover: false`.
+
+## Design (content-agnostic, zero assets)
+- **Music beds are synthesized from code** (like the mesh backgrounds are CSS
+  recipes) — license-clear by construction, nothing downloaded/sampled. Two beds
+  (`calm`, `warm`); `none` disables. A bed is a chord progression; chords are
+  blended with **overlap-add raised-cosine windows** (hop = chordSec, width =
+  2·chordSec) so the level stays CONSTANT (no pumping) while the loop still tiles
+  seamlessly (windows wrap the loop). Global 0.8s fade in/out.
+- **Click SFX**: a short decaying tick mixed at each click time, **suppressed on
+  navigating clicks** (navigate within 320ms — mirrors the ripple suppression in
+  interp.ts so audio and overlays agree).
+- **Voiceover**: each `narrate` line → TTS (OpenAI `gpt-4o-mini-tts` or ElevenLabs,
+  chosen by which API key is set) → mixed at the line's timestamp, **ducking the
+  bed** to 0.34 under speech. No key (or any failure) → skipped silently, captions
+  remain. Tight VO↔timeline length sync is out of scope for v1 (clips placed at
+  timestamps).
+- All mixing is in Node (float buffer → 16-bit WAV); ffmpeg only decodes VO and
+  muxes the final AAC track. Audio is a finishing touch: any failure falls back to
+  the silent video (render never fails on audio).
+
+## Bundled-ffmpeg gotcha (cost me a debug loop)
+Remotion's ffmpeg is a **trimmed build**: the raw `s16le` muxer is absent
+(`-f s16le` → "format not known"). It HAS the `wav` muxer + `pcm_s16le` encoder, so
+VO decode goes through a WAV container and reads the `data` chunk (not raw PCM).
+
+## Verified (re-render + decode the muxed audio)
+- MP4 carries `aac 44100 Hz mono`, duration matches the video (17.37s).
+- Music bed present and quiet (~0.023 RMS); overlap-add removed the old per-chord
+  pumping (min/max bed RMS ratio 0.05 → 0.62).
+- SFX land at the real clicks (RMS ~0.05 spikes) and are absent at the navigating
+  click; fades in/out confirmed (≈0 at both ends).
+- No-key `voiceover:true` → music+SFX track, VO skipped (didVoiceover=false).
+- typecheck + tests green (6 new audio unit tests; 30 compositor tests total).
