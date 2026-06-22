@@ -15,7 +15,7 @@ const STAGE_BG = "#0a0e1a";
 // Camera blur: map per-frame camera speed (card-space px/frame) to a small blur.
 // Kept deliberately light — strong blur smears text/UI during zooms and reads as
 // low-quality. Just enough to take the edge off 60 fps transitions, no more.
-const CAM_BLUR_GAIN = 0.03;
+const CAM_BLUR_GAIN = 0.04;
 const CAM_BLUR_MAX = 4;
 // The cursor smears more readily than the UI (it's small and high-contrast), so
 // cap its blur tighter than the content's — a crisp pointer reads as intentional.
@@ -43,7 +43,10 @@ const SAMPLED_SAMPLES = 8;
 // camera zoom). The SVG glyph box is 28px; on-screen canvas size ≈
 // CURSOR_BASE_PX × cursorScale, independent of zoom and card layout.
 const CURSOR_SVG_PX = 28;
-const CURSOR_BASE_PX = 24;
+// On-screen cursor size ≈ CURSOR_BASE_PX × cursorScale. Bumped from 24 → 28 so the
+// pointer reads at a Screen-Studio-like legible size (~42px on the 1080 canvas)
+// without ballooning at high zoom (it stays in screen space, decoupled from zoom).
+const CURSOR_BASE_PX = 28;
 
 /**
  * Composites the clean recording with a redrawn cursor, click ripples, the
