@@ -124,8 +124,19 @@ demopilot render demo.yaml --out out/demo.mp4 --speed 1.25 --no-captions
 | `-s, --speed <n>` | Global pace multiplier — `>1` faster, `<1` slower. |
 | `--fps <n>` | Output frame rate (default 60). |
 | `--background <b>` | Background preset or a raw CSS background string. |
+| `--music <bed>` | Music bed: `calm` (default), `warm`, or `none`. |
+| `--music-volume <n>` | Music bed volume `0..1` (default `0.16`). |
+| `--no-sfx` | Drop the subtle click ticks. |
+| `--voiceover` | TTS voiceover for narration (needs `OPENAI_API_KEY` or `ELEVENLABS_API_KEY`). |
 | `--no-zoom` / `--no-captions` / `--no-frame` | Drop the zoom, captions, or the framed presentation. |
 | `--headed` | Run the capture browser headed (default headless). |
+
+Renders ship with a soft, license-clear **music bed + subtle click ticks by
+default** (synthesized — no assets, no external service), muxed on with Remotion's
+bundled ffmpeg. **Voiceover** is opt-in: set `OPENAI_API_KEY` (or
+`ELEVENLABS_API_KEY`) and pass `--voiceover` to narrate each `narrate` line and
+duck the music under speech; with no key it's skipped silently and the on-screen
+captions remain.
 
 The MP4 path is printed to **stdout** (logs go to stderr), so it composes in
 scripts: `OUT=$(demopilot render demo.yaml)`. A `.timeline.json` sidecar is written
@@ -216,7 +227,7 @@ scripts/
 ## Roadmap
 
 - [x] Higher-fidelity capture via CDP `Page.startScreencast` (constant framerate, crisper text)
-- [ ] Voiceover / TTS narration synced to captions
+- [x] Audio: synthesized music bed + click ticks by default; opt-in TTS voiceover
 - [ ] Storyboarded multi-zoom and B-roll transitions
 - [ ] `storageState` recipes for authenticated demos
 - [ ] Container image based on the official Playwright image

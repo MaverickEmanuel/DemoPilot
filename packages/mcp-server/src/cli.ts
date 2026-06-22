@@ -32,6 +32,10 @@ interface RenderArgs {
   zoomMax?: number;
   spring?: number;
   panThreshold?: number;
+  music?: string;
+  musicVolume?: number;
+  sfx: boolean;
+  voiceover: boolean;
 }
 
 const USAGE = `DemoPilot — render a demo script to MP4.
@@ -49,6 +53,11 @@ Options:
       --background <b>    Background preset (aurora-mesh|nebula|ember|dawn|mist|
                          spectrum|midnight|dusk|daylight|aurora) or a raw CSS
                          background string
+      --music <bed>      Music bed: calm (default) | warm | none
+      --music-volume <n> Music bed volume 0..1 (default 0.16)
+      --no-sfx           Disable the subtle click ticks
+      --voiceover        Synthesize TTS voiceover for narrate lines (needs
+                         OPENAI_API_KEY or ELEVENLABS_API_KEY; skipped if unset)
       --zoom-min <n>     Shallowest adaptive zoom (default 1.0)
       --zoom-max <n>     Deepest adaptive zoom for small targets (default 1.8)
       --spring <n>       Camera spring frequency in rad/s (default 8; higher=snappier)
@@ -86,6 +95,8 @@ function parseRenderArgs(argv: string[]): RenderArgs {
     framed: true,
     headless: true,
     legacyCapture: false,
+    sfx: true,
+    voiceover: false,
   };
   const num = (label: string, v: string | undefined): number => {
     const n = Number(v);
@@ -118,6 +129,21 @@ function parseRenderArgs(argv: string[]): RenderArgs {
         break;
       case "--background":
         args.background = toks[++i];
+        break;
+      case "--music":
+        args.music = toks[++i];
+        break;
+      case "--no-music":
+        args.music = "none";
+        break;
+      case "--music-volume":
+        args.musicVolume = num("--music-volume", toks[++i]);
+        break;
+      case "--no-sfx":
+        args.sfx = false;
+        break;
+      case "--voiceover":
+        args.voiceover = true;
         break;
       case "--zoom-min":
         args.zoomMin = num("--zoom-min", toks[++i]);
@@ -198,6 +224,12 @@ async function cmdRender(argv: string[]): Promise<void> {
     captions: args.captions,
     framed: args.framed,
     background: args.background,
+    audio: {
+      music: args.music,
+      musicVolume: args.musicVolume,
+      sfx: args.sfx,
+      voiceover: args.voiceover,
+    },
     browserExecutable: resolveChromeForRemotion(),
     onProgress: (r) => process.stderr.write(`\r  ${(r * 100).toFixed(0)}%   `),
   });
