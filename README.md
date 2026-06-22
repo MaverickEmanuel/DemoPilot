@@ -51,67 +51,105 @@ DemoPilot separates the **adaptive** part from the **deterministic** part:
 
 Because Playwright never paints a cursor, capture is naturally clean — so the cursor is **redrawn in post** and stays fully restylable. Capture uses CDP `Page.startScreencast` for crisp, constant-frame-rate frames (with an automatic fallback to Playwright's `recordVideo`).
 
-## Quick start
+## Install
 
-> Requires **Node ≥ 20** and **pnpm**. Remotion bundles its own ffmpeg — no system ffmpeg needed.
+DemoPilot ships as a single npm package, `demopilot-mcp`, with two bins:
+`demopilot-mcp` (the stdio MCP server) and `demopilot` (the render CLI). You don't
+clone the monorepo to use it.
+
+> **Prerequisites (one-time).** **Node ≥ 20** (an [`.nvmrc`](./.nvmrc) pins 20 — run
+> `nvm use`). DemoPilot drives a real browser and renders with Remotion, so once:
+>
+> ```bash
+> npx playwright install chromium   # the capture browser
+> ```
+>
+> Remotion also needs a Chrome **Headless Shell** to render; DemoPilot reuses the
+> one Playwright just installed, so the line above covers both. If it can't find
+> one it downloads its own (needs network); point it at any Chrome with
+> `DEMOPILOT_CHROME=/path/to/chrome`. Remotion bundles its own **ffmpeg** — no
+> system ffmpeg needed.
+
+### Add it to Claude Code — one command
+
+**As a plugin (skill + server together).** Installs the `demopilot-demo-scripts`
+authoring skill *and* the MCP server in one step:
+
+```text
+/plugin marketplace add MaverickEmanuel/DemoPilot
+/plugin install demopilot@demopilot
+```
+
+**As just the MCP server** (any MCP client — Claude Code, Claude Desktop, etc.):
 
 ```bash
-pnpm install
-pnpm exec playwright install chromium   # one-time browser download
-
-# Render the bundled example end-to-end (serves a seed app, replays, composites):
-pnpm render:example
-# → renders/first-demo.mp4
+claude mcp add demopilot -- npx -y demopilot-mcp
 ```
+
+…or paste this `.mcp.json` into your project:
+
+```json
+{
+  "mcpServers": {
+    "demopilot": {
+      "command": "npx",
+      "args": ["-y", "demopilot-mcp"]
+    }
+  }
+}
+```
+
+Then ask your assistant: *“Use DemoPilot to record a demo of signing up and
+creating a project at http://localhost:4321.”* It drives the `author_demo`
+workflow and hands back an MP4 path.
 
 ### Render from the command line
 
-DemoPilot ships a standalone `demopilot` CLI, so you can render any script to MP4
-without an MCP client. It replays the script against **its own `baseUrl`** — serve
-your app there first.
+The `demopilot` CLI renders any script to MP4 without an MCP client. It replays
+the script against **its own `baseUrl`** — serve your app there first.
 
 ```bash
-# Serve the bundled seed app on http://localhost:4321 (its example's baseUrl):
-pnpm seed-app            # in one terminal
+npm i -g demopilot-mcp                  # installs the `demopilot` (+ `demopilot-mcp`) bins
+demopilot render demo.yaml              # → renders/demo.mp4
+# no global install? run it ad-hoc:
+npx -p demopilot-mcp demopilot render demo.yaml
 
-# Render the example (in another terminal):
-pnpm demopilot render examples/scripts/first-demo.yaml
-# → renders/first-demo.mp4
-
-# Options: pick the output, speed it up, drop overlays:
-pnpm demopilot render demo.yaml --out out/demo.mp4 --speed 1.25 --no-captions
+# options: pick the output, speed it up, drop overlays:
+demopilot render demo.yaml --out out/demo.mp4 --speed 1.25 --no-captions
 ```
 
 | Flag | Effect |
 | --- | --- |
 | `-o, --out <file.mp4>` | Output path (default `renders/<script-name>.mp4`). |
 | `-s, --speed <n>` | Global pace multiplier — `>1` faster, `<1` slower. |
-| `--fps <n>` | Output frame rate (default 30). |
+| `--fps <n>` | Output frame rate (default 60). |
+| `--background <b>` | Background preset or a raw CSS background string. |
 | `--no-zoom` / `--no-captions` / `--no-frame` | Drop the zoom, captions, or the framed presentation. |
 | `--headed` | Run the capture browser headed (default headless). |
 
-The MP4 path is printed to **stdout** (logs go to stderr), so it composes in scripts:
-`OUT=$(pnpm demopilot render demo.yaml)`. A `.timeline.json` sidecar is written next to
-the output. Outside this repo — once the package is installed — the same command is just
-`demopilot render demo.yaml`.
+The MP4 path is printed to **stdout** (logs go to stderr), so it composes in
+scripts: `OUT=$(demopilot render demo.yaml)`. A `.timeline.json` sidecar is written
+next to the output.
 
-### Use it as an MCP server
+## Run from source (contributors)
 
-Add DemoPilot to any MCP-capable client (Claude Desktop, etc.):
+Working on DemoPilot itself? Use the monorepo directly — no publish step:
 
-```jsonc
-{
-  "mcpServers": {
-    "demopilot": {
-      "command": "pnpm",
-      "args": ["--filter", "@demopilot/mcp-server", "start"],
-      "cwd": "/path/to/DemoPilot"
-    }
-  }
-}
+```bash
+pnpm install
+pnpm exec playwright install chromium   # one-time browser download
+
+# Render the bundled example end-to-end (serves a seed app, replays, composites):
+pnpm render:example                      # → renders/first-demo.mp4
+
+# Or the CLI / MCP server straight from source:
+pnpm seed-app                            # serve the seed app on :4321 (one terminal)
+pnpm demopilot render examples/scripts/first-demo.yaml   # (another terminal)
+pnpm mcp                                 # the stdio MCP server
+
+# Assemble + pack the publishable npm package (→ dist-package/, demopilot-mcp-*.tgz):
+pnpm pack:dist
 ```
-
-Then ask your assistant: *“Use DemoPilot to record a demo of signing up and creating a project at http://localhost:4321.”* It will drive the `author_demo` workflow and hand back an MP4 path.
 
 ## MCP surface
 
@@ -165,10 +203,14 @@ pace (tune per demo with `defaults.mousePace` or the global `speed`).
 packages/
   core/         demo-script schema, deterministic player, mouse/typing engines, capture, timeline
   compositor/   Remotion project — redraws cursor, click ripples, zoom, captions → MP4
-  mcp-server/   MCP tools, resources, and the author_demo prompt
+  mcp-server/   MCP tools, resources, the author_demo prompt, and the demopilot / demopilot-mcp bins
 examples/
   seed-app/     a tiny static app to demo against
   scripts/      a sample demo script
+scripts/
+  build-dist.mjs   assembles the published `demopilot-mcp` package (→ dist-package/)
+.claude-plugin/   Claude Code plugin manifest + marketplace (bundles the skill + MCP server)
+.claude/skills/   the demopilot-demo-scripts authoring skill
 ```
 
 ## Roadmap

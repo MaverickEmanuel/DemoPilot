@@ -19,13 +19,19 @@ pnpm exec playwright install chromium
 | `pnpm render:example` | Full end-to-end render of the bundled example → `renders/first-demo.mp4`. |
 | `pnpm seed-app` | Serve the seed app at http://localhost:4321. |
 | `pnpm mcp` | Start the MCP server on stdio. |
+| `pnpm pack:dist` | Assemble + `npm pack` the single publishable package (`demopilot-mcp`). |
 
 ## Project layout
 
 - `packages/core` — schema, player, capture, timeline (no MCP/React deps).
 - `packages/compositor` — Remotion project (keeps its own timeline types).
-- `packages/mcp-server` — MCP tools, resources, prompt.
+- `packages/mcp-server` — MCP tools, resources, prompt; the CLI + MCP bins.
 - `examples/` — seed app + sample script.
+- `scripts/build-dist.mjs` — assembles the published `demopilot-mcp` package
+  (vendors core + compositor as bundled deps so Remotion can still re-bundle the
+  compositor source at render time). Output: `dist-package/` (gitignored).
+- `.claude-plugin/` — the Claude Code plugin (`plugin.json`) + marketplace entry,
+  which bundle the `demopilot-demo-scripts` skill and the MCP server together.
 
 ## Guidelines
 
