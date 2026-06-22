@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "demopilot",
+  "owner": {
+    "name": "DemoPilot contributors",
+    "url": "https://github.com/MaverickEmanuel/DemoPilot"
+  },
+  "metadata": {
+    "description": "DemoPilot — author and render polished product-demo MP4s from Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "demopilot",
+      "source": "./",
+      "description": "DemoPilot authoring skill + MCP server: drive your app with Playwright and render a Screen-Studio-style MP4.",
+      "version": "0.1.0",
+      "keywords": ["mcp", "demo", "video", "playwright", "remotion"]
+    }
+  ]
+}

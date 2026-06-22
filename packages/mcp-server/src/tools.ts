@@ -136,9 +136,16 @@ export function registerTools(server: McpServer): void {
         zoomOnClick: z.boolean().optional(),
         captions: z.boolean().optional(),
         headless: z.boolean().optional(),
+        music: z.string().optional().describe("Music bed: 'calm' (default), 'warm', or 'none'"),
+        musicVolume: z.number().min(0).max(1).optional().describe("Music bed volume 0..1 (default 0.16)"),
+        sfx: z.boolean().optional().describe("Subtle click ticks (default true)"),
+        voiceover: z
+          .boolean()
+          .optional()
+          .describe("TTS voiceover for narrate lines (needs OPENAI_API_KEY/ELEVENLABS_API_KEY; skipped if unset)"),
       },
     },
-    async ({ name, script: inline, fps, zoomOnClick, captions, headless }) => {
+    async ({ name, script: inline, fps, zoomOnClick, captions, headless, music, musicVolume, sfx, voiceover }) => {
       const { script, id } = await resolveScript({ name, inline });
       const dir = renderDir(id);
       await mkdir(dir, { recursive: true });
@@ -164,6 +171,7 @@ export function registerTools(server: McpServer): void {
         fps,
         zoomOnClick,
         captions,
+        audio: { music, musicVolume, sfx, voiceover },
         browserExecutable: resolveChromeForRemotion(),
       });
 
