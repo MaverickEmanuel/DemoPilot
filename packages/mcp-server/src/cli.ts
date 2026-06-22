@@ -10,9 +10,9 @@
  * script is rendered against its own `baseUrl` (serve your app there first; the
  * bundled example targets the local seed app on http://localhost:4321).
  */
-import { writeFile, mkdtemp } from "node:fs/promises";
+import { writeFile, mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { loadDemoScript, playDemo } from "@demopilot/core";
 import { renderDemo, resolveBundledFfmpeg } from "@demopilot/compositor";
 import { resolveChromeForRemotion } from "./chrome.js";
@@ -166,6 +166,9 @@ async function cmdRender(argv: string[]): Promise<void> {
   const name = basename(args.scriptPath).replace(/\.(ya?ml|json)$/i, "") || "demo";
   const outPath = resolve(baseCwd, args.out ?? join("renders", `${name}.mp4`));
   const timelinePath = outPath.replace(/\.mp4$/i, "") + ".timeline.json";
+  // Ensure the output directory exists before writing the timeline sidecar
+  // (renderDemo also creates it, but the sidecar is written first).
+  await mkdir(dirname(outPath), { recursive: true });
 
   const captureDir = await mkdtemp(join(tmpdir(), "demopilot-cli-"));
 
