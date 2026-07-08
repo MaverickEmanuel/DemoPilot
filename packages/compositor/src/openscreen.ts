@@ -103,7 +103,43 @@ export interface OsEditorState {
   autoFocusAll: false;
   aspectRatio: "native";
   cursorTheme: "default";
+  // General appearance/layout defaults — see OS_DEFAULT_APPEARANCE.
+  wallpaper: string;
+  showBlur: boolean;
+  padding: number;
+  borderRadius: number;
+  shadowIntensity: number;
+  motionBlurAmount: number;
 }
+
+/**
+ * "General settings" baked into every exported project so demos import already
+ * looking polished — still fully editable in OpenScreen. These field names and
+ * types match ProjectEditorState in getopenscreen/openscreen@b67811f
+ * (projectPersistence.ts); normalizeProjectEditor keeps each value when it
+ * type-checks and otherwise falls back to OpenScreen's own default, so an
+ * unfamiliar build degrades gracefully rather than breaking. Values were
+ * captured from a hand-tuned OpenScreen save.
+ *
+ * NOTE: cursor *size* is not a persisted project field in this OpenScreen
+ * version (DEFAULT_CURSOR_SIZE is a render-time constant, not part of
+ * ProjectEditorState), so it can't be defaulted here — it stays an OpenScreen
+ * app-level preference.
+ */
+export const OS_DEFAULT_APPEARANCE = {
+  /** Background image (an OpenScreen built-in) the blur applies to. */
+  wallpaper: "/wallpapers/wallpaper12.jpg",
+  /** Blurred background. */
+  showBlur: true,
+  /** Float the video off the edges so background, shadow, and rounding show. */
+  padding: 50,
+  /** Rounded edges. */
+  borderRadius: 4,
+  /** A subtle drop shadow. */
+  shadowIntensity: 0.2,
+  /** A tiny bit of motion blur. */
+  motionBlurAmount: 0.08,
+} as const;
 
 export interface OsProjectMedia {
   screenVideoPath: string;
@@ -275,6 +311,7 @@ export function buildOpenScreenProject(
       autoFocusAll: false,
       aspectRatio: "native",
       cursorTheme: "default",
+      ...OS_DEFAULT_APPEARANCE,
     },
   };
 
