@@ -59,10 +59,10 @@ const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
 // Box padding before computing depth, for a little breathing room.
 const BOX_PAD = 1.1;
 
-// Outro: after the final action the camera eases to a gentle "landing" framing
-// (a slight pull-back that reveals the result in context) instead of a full
-// zoom-out to a wide, empty shot — which read as a soft, slow reset.
-const OUTRO_REST = 1.12;
+// Outro: after the final action the camera eases all the way back out to the
+// full, unzoomed frame — a deliberate "and we're done" reset that releases the
+// viewer from the zoomed working shot and reveals the whole result in context.
+const OUTRO_REST = 1.0;
 
 export interface Resolved {
   minZoom: number;
@@ -147,7 +147,7 @@ export function groupDepth(group: ActionGroup, timeline: Timeline): number {
  *
  *   1. inside a nav establish-hold → calm centered establish framing;
  *   2. inside a shot window        → that shot's anchor/depth (follow-cam glide);
- *   3. after the last shot         → gentle outro landing;
+ *   3. after the last shot         → full zoom-out (centered outro reset);
  *   4. before the first shot       → wide (the intro reveal zooms in).
  */
 function targetAt(t: number, plan: MotionPlan, cfg: Resolved, cx: number, cy: number): CameraState {

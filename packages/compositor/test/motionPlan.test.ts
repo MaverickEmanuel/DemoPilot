@@ -167,11 +167,11 @@ describe("buildMotionPlan (signup-flow fixture)", () => {
     expect(plan.outputDurationMs).toBe(plan.durationMs + OUTRO_HOLD_MS);
     expect(outputDurationMs(tl.durationMs)).toBe(plan.outputDurationMs);
     expect(plan.outputDurationMs).toBeGreaterThan(plan.durationMs);
-    // At the final frame the camera has settled on the gentle outro landing
-    // (a slight pull-back, centered) rather than a full zoom-out.
+    // At the final frame the camera has eased all the way back out to the full,
+    // unzoomed frame (centered) — the deliberate outro reset.
     const finalCam = cameraAt(track, plan.outputDurationMs);
-    expect(finalCam.scale).toBeGreaterThan(1.1);
-    expect(finalCam.scale).toBeLessThan(1.14);
+    expect(finalCam.scale).toBeGreaterThanOrEqual(1);
+    expect(finalCam.scale).toBeLessThan(1.05);
     expect(finalCam.focusX).toBeCloseTo(tl.width / 2, 2);
     expect(finalCam.focusY).toBeCloseTo(tl.height / 2, 2);
   });

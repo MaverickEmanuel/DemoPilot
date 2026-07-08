@@ -138,17 +138,17 @@ describe("camera transitions", () => {
     expect(minScale).toBeGreaterThan(hold - 0.06);
   });
 
-  it("lands on a gentle pull-back after the last shot (no full zoom-out outro)", () => {
+  it("eases all the way back out to the full frame after the last shot (outro reset)", () => {
     const tl = timeline(
       [{ kind: "click", t: 1500, x: 640, y: 400, button: "left", bbox: box(610, 380, 60, 40), container: "a" }],
       { durationMs: 6000 },
     );
     const track = trackOf(tl, FPS);
-    // Well after the action settles, the camera holds a gentle landing framing —
-    // pulled back from the hold, but not a full zoom-out to wide (scale 1).
+    // Well after the action settles, the camera has eased all the way back out
+    // to the full, unzoomed frame (scale 1) — the deliberate outro reset.
     const ending = cameraAt(track, 5800).scale;
-    expect(ending).toBeGreaterThan(1.05);
-    expect(ending).toBeLessThan(1.3);
+    expect(ending).toBeGreaterThanOrEqual(1);
+    expect(ending).toBeLessThan(1.06);
   });
 });
 
