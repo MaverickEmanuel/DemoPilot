@@ -154,20 +154,23 @@ export const DemoDefaultsSchema = z
         maxZoom: z.number().min(1).max(3).default(1.55).describe("Deepest adaptive zoom"),
         /** Fraction of the frame an action group's box should fill (drives depth). */
         fill: z.number().min(0.2).max(1).default(0.62).describe("Target frame fill for a group"),
-        /** Magnification held during a zoom-out handoff between far-apart groups. */
+        /** Magnification the camera eases to and holds during a navigation
+         * establish beat (centered) before following the cursor into the next shot. */
         establishLevel: z
           .number()
           .min(1)
           .max(2)
           .default(1.06)
-          .describe("Magnification during a far-jump establishing handoff"),
-        /** Pan vs. zoom-out threshold, as a fraction of the viewport diagonal. */
+          .describe("Magnification held during a navigation establish beat"),
+        /** @deprecated No longer read. Every same-page transition is now a direct
+         * follow-cam pan (the establishing pull-back "dome" was removed); only
+         * navigations get an establish beat. Kept for back-compat parsing. */
         panThreshold: z
           .number()
           .min(0)
           .max(1)
           .default(0.42)
-          .describe("Anchor distance (fraction of diagonal) above which a jump zooms out"),
+          .describe("Deprecated — no longer read; every same-page transition is a direct pan"),
         /** Spring angular frequency (rad/s); higher = snappier camera. */
         stiffness: z.number().min(1).max(40).default(8).describe("Camera spring frequency (rad/s)"),
         /** Spring damping ratio (1 = critical; <1 adds a subtle settle). */

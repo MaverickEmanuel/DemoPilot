@@ -1,4 +1,5 @@
 import type { Timeline, CursorSample } from "./types";
+import type { MotionPlan } from "./motionPlan";
 
 export interface Vec {
   x: number;
@@ -6,6 +7,14 @@ export interface Vec {
 }
 
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
+
+/** Minimum-jerk ease 6u⁵ − 15u⁴ + 10u³: starts and ends at zero velocity AND
+ * zero acceleration, so a synthesized travel departs and lands with no snap. */
+export function minJerk(u: number): number {
+  const t = clamp(u, 0, 1);
+  return t * t * t * (t * (t * 6 - 15) + 10);
+}
 
 /** Smooth Hermite ramp; 0 at a, 1 at b (works for a>b too). */
 function smoothstep(a: number, b: number, x: number): number {
@@ -72,6 +81,33 @@ export function cursorAt(samples: CursorSample[], tMs: number): Vec {
   const p0 = samples[i - 1] ?? { x: 2 * p1.x - p2.x, y: 2 * p1.y - p2.y };
   const p3 = samples[i + 2] ?? { x: 2 * p2.x - p1.x, y: 2 * p2.y - p1.y };
   return catmullRom(p0, p1, p2, p3, s);
+}
+
+/**
+ * The cursor position at `tMs` under the motion plan. Inside a synthesized
+ * travel it follows a minimum-jerk arc (bowed toward the viewport center);
+ * inside a parked hold it sits exactly at the hold anchor; otherwise — within an
+ * action's own recorded span, or on a timeline that predates the plan's geometry
+ * — it falls back to the recorded Catmull-Rom path, so typing/click nuance and
+ * pixel-exact click points survive. Travel endpoints coincide with recorded
+ * samples by construction, so the composite path is continuous everywhere.
+ */
+export function plannedCursorAt(plan: MotionPlan, samples: CursorSample[], tMs: number): Vec {
+  for (const tr of plan.travels) {
+    if (tMs >= tr.tDepart && tMs <= tr.tArrive) {
+      const dur = tr.tArrive - tr.tDepart || 1;
+      const s = minJerk((tMs - tr.tDepart) / dur);
+      const arc = Math.sin(Math.PI * s);
+      return {
+        x: lerp(tr.from.x, tr.to.x, s) + tr.bow.x * arc,
+        y: lerp(tr.from.y, tr.to.y, s) + tr.bow.y * arc,
+      };
+    }
+  }
+  for (const h of plan.holds) {
+    if (tMs >= h.t0 && tMs <= h.t1) return { x: h.at.x, y: h.at.y };
+  }
+  return cursorAt(samples, tMs);
 }
 
 // ----------------------------------------------------------------------------

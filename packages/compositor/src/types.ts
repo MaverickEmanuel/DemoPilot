@@ -55,7 +55,9 @@ export interface ZoomConfig {
   /** Inner safe-area insets (fraction of viewport) the focus rect is fit into. */
   innerSafeX?: number;
   innerSafeY?: number;
+  /** Magnification held during a navigation establish beat (centered). */
   establishLevel?: number;
+  /** @deprecated No longer read — every same-page transition is a direct pan. */
   panThreshold?: number;
   stiffness?: number;
   damping?: number;

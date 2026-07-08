@@ -3,6 +3,7 @@ import { Composition } from "remotion";
 import { Demo } from "./Demo";
 import { EMPTY_TIMELINE, type DemoCompositionProps } from "./types";
 import { framedSize } from "./frame";
+import { outputDurationMs } from "./outro";
 
 const emptyFramed = framedSize(EMPTY_TIMELINE.width, EMPTY_TIMELINE.height);
 
@@ -37,7 +38,9 @@ export const RemotionRoot: React.FC = () => {
           fps,
           width: dims.width,
           height: dims.height,
-          durationInFrames: Math.max(1, Math.ceil((props.timeline.durationMs / 1000) * fps)),
+          // The composition is extended past the recording by the outro
+          // freeze-hold so the final frame rests under a settled camera.
+          durationInFrames: Math.max(1, Math.ceil((outputDurationMs(props.timeline.durationMs) / 1000) * fps)),
         };
       }}
     />

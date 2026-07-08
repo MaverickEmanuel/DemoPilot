@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "width": 1280,
+  "height": 800,
+  "durationMs": 14100,
+  "zoom": { "level": 1.25 },
+  "cursor": [
+    { "t": 0, "x": 300, "y": 500 },
+    { "t": 300, "x": 300, "y": 500 },
+    { "t": 430, "x": 470, "y": 400 },
+    { "t": 560, "x": 640, "y": 300 },
+    { "t": 2100, "x": 640, "y": 300 },
+    { "t": 2300, "x": 640, "y": 360 },
+    { "t": 3800, "x": 640, "y": 360 },
+    { "t": 3980, "x": 640, "y": 430 },
+    { "t": 4450, "x": 640, "y": 430 },
+    { "t": 6100, "x": 640, "y": 430 },
+    { "t": 6350, "x": 810, "y": 275 },
+    { "t": 6600, "x": 980, "y": 120 },
+    { "t": 7050, "x": 980, "y": 120 },
+    { "t": 10050, "x": 980, "y": 120 },
+    { "t": 10250, "x": 810, "y": 260 },
+    { "t": 10400, "x": 640, "y": 400 },
+    { "t": 12150, "x": 640, "y": 400 },
+    { "t": 12350, "x": 760, "y": 470 },
+    { "t": 12700, "x": 760, "y": 470 },
+    { "t": 14100, "x": 760, "y": 470 }
+  ],
+  "events": [
+    { "kind": "navigate", "t": 0, "url": "http://localhost:4321/" },
+    { "kind": "group", "t": 250, "action": "start", "name": "Sign in" },
+    {
+      "kind": "type",
+      "tStart": 560,
+      "t": 1400,
+      "text": "demo@acme.com",
+      "x": 640,
+      "y": 300,
+      "bbox": { "x": 440, "y": 278, "width": 400, "height": 44 },
+      "container": "form#signup"
+    },
+    {
+      "kind": "type",
+      "tStart": 2300,
+      "t": 3100,
+      "text": "hunter2demo",
+      "x": 640,
+      "y": 360,
+      "bbox": { "x": 440, "y": 338, "width": 400, "height": 44 },
+      "container": "form#signup"
+    },
+    {
+      "kind": "click",
+      "t": 4450,
+      "x": 640,
+      "y": 430,
+      "button": "left",
+      "bbox": { "x": 520, "y": 410, "width": 240, "height": 40 },
+      "container": "form#signup"
+    },
+    { "kind": "group", "t": 4500, "action": "end" },
+    { "kind": "navigate", "t": 4600, "url": "http://localhost:4321/dashboard" },
+    { "kind": "narrate", "t": 4900, "text": "Now let's create your first project" },
+    {
+      "kind": "click",
+      "t": 7050,
+      "x": 980,
+      "y": 120,
+      "button": "left",
+      "bbox": { "x": 900, "y": 100, "width": 160, "height": 40 },
+      "container": "header"
+    },
+    {
+      "kind": "type",
+      "tStart": 10600,
+      "t": 11450,
+      "text": "Marketing site",
+      "x": 640,
+      "y": 400,
+      "bbox": { "x": 440, "y": 378, "width": 400, "height": 44 },
+      "container": "dialog[role=dialog]"
+    },
+    {
+      "kind": "click",
+      "t": 12700,
+      "x": 760,
+      "y": 470,
+      "button": "left",
+      "bbox": { "x": 700, "y": 450, "width": 120, "height": 40 },
+      "container": "dialog[role=dialog]"
+    }
+  ]
+}

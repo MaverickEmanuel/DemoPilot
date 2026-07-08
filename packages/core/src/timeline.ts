@@ -70,9 +70,9 @@ export interface ZoomConfig {
   maxZoom?: number;
   /** Fraction of the frame an action group's box should fill (drives depth). */
   fill?: number;
-  /** Magnification held during a "zoom-out" handoff between far-apart groups. */
+  /** Magnification held during a navigation establish beat (centered). */
   establishLevel?: number;
-  /** Pan vs. zoom-out threshold, as a fraction of the viewport diagonal. */
+  /** @deprecated No longer read — every same-page transition is a direct pan. */
   panThreshold?: number;
   /** Spring angular frequency (rad/s); higher = snappier camera. */
   stiffness?: number;
