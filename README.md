@@ -26,7 +26,7 @@
 
 Recording product demos by hand is tedious and brittle: you fumble the cursor, mistype, and re-record five times. DemoPilot turns the demo into a **reproducible script** that an AI authors with you, then renders on demand — so when your UI changes, you re-render instead of re-record.
 
-The output is a clean H.264 MP4 with a smooth composited cursor, click ripples, and subtle zoom — and it imports straight into [Screen Studio](https://screen.studio) or any editor for final polish.
+The output is a clean H.264 MP4 with a smooth composited cursor, click ripples, and subtle zoom — and it imports straight into [Screen Studio](https://screen.studio) or any editor for final polish. Prefer to keep editing? Export the same demo as an **editable [OpenScreen](https://github.com/getopenscreen/openscreen) project** and hand-tune every zoom as a real keyframe (see [below](#export-to-openscreen-editable-project)).
 
 ```
    "Show signing up and creating a first project."
@@ -178,10 +178,38 @@ pnpm pack:dist
 | `add_narration` | Add a caption/narration line at the current moment. |
 | `save_demo` | Persist the working script as reusable YAML. |
 | `render_demo` | Replay → clean capture → Remotion composite → **MP4** (+ `timeline.json`). |
+| `render_demo_openscreen` | Replay → clean capture → **editable [OpenScreen](https://github.com/getopenscreen/openscreen) project** (zoom + caption tracks as real keyframes, not baked footage). |
 | `list_demos` / `get_demo` | Browse saved scripts. |
 
 **Resources:** `demo://schema` (the JSON Schema), `demo://scripts/{name}`, `demo://renders/{name}`.
 **Prompt:** `author_demo` — the guided authoring loop.
+
+## Export to OpenScreen (editable project)
+
+`render_demo` bakes the cursor, zoom, click ripples, and frame into a finished
+MP4. `render_demo_openscreen` does the opposite: it hands you the **clean screen
+recording** plus DemoPilot's suggestions as **editable
+[OpenScreen](https://github.com/getopenscreen/openscreen) tracks** — so you can
+reopen the project and hand-tune every zoom as a real keyframe instead of
+re-rendering.
+
+It writes a self-contained project folder (keep the three files together —
+OpenScreen resolves the video relative to the project):
+
+```
+<name>.openscreen        project — zoom + caption tracks, settings
+<name>.mp4               the CLEAN recording — no zoom, ripples, or padding baked into the pixels
+<name>.mp4.cursor.json   cursor telemetry (samples + click markers)
+```
+
+Open it in OpenScreen via **File → Open Project**. The zooms DemoPilot planned
+arrive as editable keyframes, click ripples are drawn by OpenScreen from the
+cursor telemetry, and padding/background stay OpenScreen's own editable defaults
+— **nothing is baked into the footage.** The exporter probes the video and
+refuses a composited render, so only the clean capture is ever imported. Format
+is pinned to OpenScreen `PROJECT_VERSION 2`; see
+[docs/openscreen-export.md](./docs/openscreen-export.md) for the full mapping and
+fidelity notes.
 
 ## The demo script format
 

@@ -42,6 +42,7 @@ import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
 import type { Timeline, TimelineEvent, CursorSample } from "./types.js";
 import { buildMotionPlan } from "./motionPlan.js";
+import { probeVideoDimensions } from "./ffmpeg.js";
 
 // --- OpenScreen on-disk shapes (structural mirrors of the pinned source) ------
 
@@ -322,7 +323,15 @@ function markClicks(samples: OsCursorSample[], timeline: Timeline, vw: number, v
 // --- writer ------------------------------------------------------------------
 
 export interface WriteOpenScreenProjectOptions {
-  /** Path to the clean (cursor-less) recording — mp4, webm, or mov. */
+  /**
+   * Path to the CLEAN screen recording — the raw capture from playDemo, mp4,
+   * webm, or mov. This must NOT be renderDemo's finished/composited output:
+   * that video has zoom, click ripples, and the padding background baked into
+   * its pixels, which OpenScreen is meant to re-add as editable layers. The
+   * clean capture's frame matches the timeline's coordinate space
+   * (timeline.width x timeline.height); writeOpenScreenProject probes the video
+   * and throws if it doesn't. See {@link assertCleanRecording}.
+   */
   videoPath: string;
   /** The synchronized event timeline (sidecar of the recording). */
   timeline: Timeline;
@@ -352,6 +361,31 @@ const slug = (s: string): string =>
     .replace(/^-+|-+$/g, "") || "demo";
 
 /**
+ * Guards against importing a *composited* render into OpenScreen. The video
+ * handed to OpenScreen MUST be the CLEAN screen recording — the raw capture
+ * whose frame is the timeline's coordinate space. renderDemo's finished output
+ * is a larger padded canvas with zoom, click ripples, and a background baked
+ * into the pixels; importing that would double-apply the very things OpenScreen
+ * is meant to re-add as editable layers. Dimensions are the reliable tell: the
+ * clean capture is exactly timeline.width x timeline.height, the composite is a
+ * different (padded) size. Throws on mismatch.
+ */
+export function assertCleanRecording(
+  videoDimensions: { width: number; height: number },
+  timeline: Timeline,
+  videoName: string,
+): void {
+  if (videoDimensions.width === timeline.width && videoDimensions.height === timeline.height) return;
+  throw new Error(
+    `OpenScreen export needs the CLEAN screen recording (${timeline.width}x${timeline.height}, matching the ` +
+      `timeline's coordinate space), but "${videoName}" is ${videoDimensions.width}x${videoDimensions.height}. ` +
+      `This looks like renderDemo's composited output — a padded canvas with zoom, click ripples, and background ` +
+      `already baked into the pixels. Import the clean capture instead (playDemo's raw recording); OpenScreen ` +
+      `re-adds zoom, ripples, and padding as editable layers.`,
+  );
+}
+
+/**
  * Writes a self-contained OpenScreen project folder from a DemoPilot recording:
  * copies the clean video in, writes the cursor telemetry sidecar, and writes the
  * .openscreen project referencing the co-located video by absolute path.
@@ -364,6 +398,13 @@ export async function writeOpenScreenProject(
   if (![".mp4", ".webm", ".mov"].includes(ext)) {
     throw new Error(`OpenScreen accepts .mp4, .webm, or .mov videos; got "${ext}" (${basename(opts.videoPath)})`);
   }
+
+  // Backstop: refuse a composited render (padded canvas with zoom/ripples baked
+  // in). The clean capture's dimensions equal the timeline's; the composite's
+  // don't. Best-effort — if ffprobe is unavailable the probe returns null and we
+  // proceed rather than block a valid export.
+  const dims = probeVideoDimensions(opts.videoPath);
+  if (dims) assertCleanRecording(dims, opts.timeline, basename(opts.videoPath));
 
   await mkdir(opts.outDir, { recursive: true });
 
