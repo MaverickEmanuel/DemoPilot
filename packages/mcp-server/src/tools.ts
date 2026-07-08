@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StepSchema, DemoScriptSchema, playDemo, type DemoScript } from "@demopilot/core";
 import { renderDemo, resolveBundledFfmpeg } from "@demopilot/compositor";
+import type { Timeline } from "@demopilot/core";
 import { AuthoringSession } from "./session.js";
 import { resolveChromeForRemotion } from "./chrome.js";
 import { saveScript, loadScript, listScripts, renderDir, saveRenderMeta, type RenderMeta } from "./store.js";
@@ -198,6 +199,54 @@ export function registerTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "render_demo_openscreen",
+    {
+      title: "Export demo to OpenScreen",
+      description:
+        "Export a demo as an EDITABLE OpenScreen project instead of a flat MP4. Replays the script, captures the clean recording, and writes a self-contained OpenScreen project folder (video + cursor telemetry + zoom/caption tracks). Open the .openscreen file in OpenScreen (File → Open Project) to hand-tune the zooms DemoPilot suggested — they arrive as real, editable keyframes, not baked footage. Renders the named saved demo, an inline script, or the active session.",
+      inputSchema: {
+        name: z.string().optional().describe("Name of a saved demo to export"),
+        script: DemoScriptSchema.optional().describe("An inline demo script to export"),
+        fps: z.number().int().positive().max(60).optional(),
+        headless: z.boolean().optional(),
+      },
+    },
+    async ({ name, script: inline, fps, headless }) => {
+      const { script, id } = await resolveScript({ name, inline });
+      const dir = join(renderDir(id), "openscreen");
+      await mkdir(dir, { recursive: true });
+
+      // Same capture path as render_demo: crisp constant-fps CDP screencast when
+      // ffmpeg is available, else the realtime recordVideo backend.
+      const ffmpeg = resolveBundledFfmpeg();
+      const { videoPath, timeline } = await playDemo(script, {
+        videoDir: join(dir, "capture"),
+        headless: headless ?? process.env.DEMOPILOT_HEADLESS !== "false",
+        capture: ffmpeg ? "screencast" : "recordVideo",
+        ffmpeg: ffmpeg ?? undefined,
+      });
+
+      // Keep the timeline sidecar for debugging parity with render_demo.
+      await writeFile(join(dir, "timeline.json"), JSON.stringify(timeline, null, 2), "utf8");
+
+      const { writeOpenScreenProject } = await loadOpenScreenExporter();
+      const project = await writeOpenScreenProject({ videoPath, timeline, outDir: dir, name: id, fps });
+
+      return text(
+        `Exported "${id}" as an editable OpenScreen project.\n` +
+          `  project: ${project.projectPath}\n` +
+          `  video:   ${project.videoPath}\n` +
+          `  cursor:  ${project.cursorPath}\n` +
+          `${project.zoomRegionCount} zoom region(s), ${project.annotationCount} caption(s), ` +
+          `${project.cursorSampleCount} cursor sample(s).\n\n` +
+          `Open in OpenScreen: File → Open Project → select the .openscreen file. ` +
+          `The suggested zooms appear as editable keyframes you can hand-tune. ` +
+          `(Keep the three files together — OpenScreen resolves the video relative to the project file.)`,
+      );
+    },
+  );
+
+  server.registerTool(
     "list_demos",
     { title: "List demos", description: "List saved demo scripts.", inputSchema: {} },
     async () => {
@@ -233,4 +282,36 @@ async function resolveScript(args: { name?: string; inline?: DemoScript }): Prom
     return { script, id: slug(script.name) };
   }
   throw new Error("Nothing to render: provide a saved demo name, an inline script, or open a session first.");
+}
+
+interface WrittenOpenScreenProject {
+  projectPath: string;
+  videoPath: string;
+  cursorPath: string;
+  zoomRegionCount: number;
+  annotationCount: number;
+  cursorSampleCount: number;
+}
+
+interface OpenScreenExporter {
+  writeOpenScreenProject(opts: {
+    videoPath: string;
+    timeline: Timeline;
+    outDir: string;
+    name?: string;
+    fps?: number;
+  }): Promise<WrittenOpenScreenProject>;
+}
+
+/**
+ * Loads the OpenScreen exporter at runtime. It's a separate compositor subpath
+ * (@demopilot/compositor/openscreen) because it pulls the Remotion browser-bundle
+ * motion planner, whose Bundler-resolution (extensionless) imports can't be
+ * type-checked under this package's NodeNext config. The specifier is widened to
+ * `string` so the NodeNext typecheck doesn't statically resolve into that graph;
+ * tsx resolves it at runtime. The small surface is declared above.
+ */
+async function loadOpenScreenExporter(): Promise<OpenScreenExporter> {
+  const specifier: string = "@demopilot/compositor/openscreen";
+  return (await import(specifier)) as OpenScreenExporter;
 }
