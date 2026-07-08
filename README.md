@@ -203,13 +203,14 @@ OpenScreen resolves the video relative to the project):
 ```
 
 Open it in OpenScreen via **File → Open Project**. The zooms DemoPilot planned
-arrive as editable keyframes, click ripples are drawn by OpenScreen from the
-cursor telemetry, and padding/background stay OpenScreen's own editable defaults
-— **nothing is baked into the footage.** The exporter probes the video and
-refuses a composited render, so only the clean capture is ever imported. Format
-is pinned to OpenScreen `PROJECT_VERSION 2`; see
-[docs/openscreen-export.md](./docs/openscreen-export.md) for the full mapping and
-fidelity notes.
+arrive as editable keyframes, and click ripples are drawn by OpenScreen from the
+cursor telemetry — **nothing is baked into the footage.** The project also ships
+polished-but-editable general settings so a demo looks finished on first open: a
+blurred background, padding, rounded corners, a subtle shadow, and a touch of
+motion blur. The exporter probes the video and refuses a composited render, so
+only the clean capture is ever imported. Format is pinned to OpenScreen
+`PROJECT_VERSION 2`; see [docs/openscreen-export.md](./docs/openscreen-export.md)
+for the full mapping and fidelity notes.
 
 ## The demo script format
 

@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { assertCleanRecording, buildOpenScreenProject, nearestDepth, OS_ZOOM_DEPTH_SCALES } from "../src/openscreen";
+import {
+  assertCleanRecording,
+  buildOpenScreenProject,
+  nearestDepth,
+  OS_DEFAULT_APPEARANCE,
+  OS_ZOOM_DEPTH_SCALES,
+} from "../src/openscreen";
 import type { Timeline } from "../src/types";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -58,6 +64,16 @@ describe("buildOpenScreenProject (signup-flow fixture)", () => {
     // Auto-zoom is off so OpenScreen never recomputes over our suggested zooms.
     expect(project.editor.autoZoomEnabled).toBe(false);
     expect(project.editor.aspectRatio).toBe("native");
+  });
+
+  it("bakes the polished general-appearance defaults into the project", () => {
+    const e = project.editor;
+    expect(e.showBlur).toBe(true); // blurred background
+    expect(e.wallpaper).toBe(OS_DEFAULT_APPEARANCE.wallpaper);
+    expect(e.borderRadius).toBe(4); // rounded edges
+    expect(e.shadowIntensity).toBeCloseTo(0.2); // shadow
+    expect(e.motionBlurAmount).toBeCloseTo(0.08); // a tiny bit of motion blur
+    expect(e.padding).toBe(50); // float so background/shadow/rounding are visible
   });
 
   it("maps camera shots to editable, in-bounds manual zoom regions", () => {

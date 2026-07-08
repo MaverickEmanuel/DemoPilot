@@ -80,6 +80,23 @@ Deliberate choices:
   pixel match.
 - **Cursor mode is `editable-overlay`**, so OpenScreen draws the cursor from the
   telemetry (re-themeable), matching DemoPilot's own cursor-from-timeline model.
+- **Polished general-settings defaults** (`OS_DEFAULT_APPEARANCE`) are baked in so
+  a demo looks finished on first open — all still editable in OpenScreen:
+
+  | Field | Value | Effect |
+  | --- | --- | --- |
+  | `showBlur` | `true` | blurred background |
+  | `wallpaper` | `/wallpapers/wallpaper12.jpg` | the OpenScreen built-in the blur applies to |
+  | `padding` | `50` | floats the video so background/shadow/rounding show |
+  | `borderRadius` | `4` | rounded edges |
+  | `shadowIntensity` | `0.2` | subtle drop shadow |
+  | `motionBlurAmount` | `0.08` | a touch of motion blur |
+
+  These are type-checked by `normalizeProjectEditor`, which falls back to
+  OpenScreen's own default for any field an unfamiliar build doesn't recognize.
+  **Cursor size is intentionally not set** — it isn't a persisted project field at
+  this OpenScreen version (`DEFAULT_CURSOR_SIZE` is a render-time constant), so it
+  stays an OpenScreen app-level preference.
 
 ## Format pinning
 
