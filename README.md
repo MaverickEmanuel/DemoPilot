@@ -16,7 +16,7 @@
 
 <a href="./docs/media/first-demo.mp4"><img src="./docs/media/first-demo.gif" alt="DemoPilot rendering a sign-up-and-create-project demo: cursor glides through the form, click ripples, and a smooth follow-cam zoom" width="720" /></a>
 
-<sub><em>An actual DemoPilot render — composited cursor, click ripples, and follow-cam zoom. <a href="./docs/media/first-demo.mp4">Watch the full-quality MP4 (with audio)&nbsp;→</a></em></sub>
+<sub><em>An actual DemoPilot render — composited cursor, click ripples, and follow-cam zoom.</em></sub>
 
 </div>
 
