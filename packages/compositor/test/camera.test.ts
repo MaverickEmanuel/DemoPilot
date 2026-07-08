@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { buildActionGroups } from "../src/groups";
-import { computeCameraTrack, cameraAt, cameraTransform, cameraSpeedAt, groupDepth } from "../src/camera";
+import { cameraAt, cameraTransform, cameraSpeedAt, groupDepth } from "../src/camera";
+import { computeCameraMotion } from "../src/motionPlan";
 import { cardLayout, CANVAS, FRAME } from "../src/frame";
 import type { Timeline, Box } from "../src/types";
 
 const FPS = 30;
+
+/** The camera track for a timeline (the plan is derived and shared internally). */
+const trackOf = (tl: Timeline, fps = FPS) => computeCameraMotion(tl, fps).track;
 
 function timeline(events: Timeline["events"], extra: Partial<Timeline> = {}): Timeline {
   return {
@@ -83,7 +87,7 @@ describe("adaptive depth", () => {
 describe("camera (login)", () => {
   it("holds one steady anchored zoom across the whole login — no punch on submit", () => {
     const tl = login();
-    const track = computeCameraTrack(tl, FPS);
+    const track = trackOf(tl, FPS);
     const typingScale = cameraAt(track, 2200).scale;
     const betweenFields = cameraAt(track, 2800).scale;
     const submitScale = cameraAt(track, 5200).scale;
@@ -102,7 +106,7 @@ describe("camera (login)", () => {
   });
 
   it("anchors on the form, not on the submit button", () => {
-    const track = computeCameraTrack(login(), FPS);
+    const track = trackOf(login(), FPS);
     // Focus stays near the form center (x≈640) rather than jumping to the button (x≈520).
     expect(cameraAt(track, 5200).focusX).toBeGreaterThan(600);
   });
@@ -114,25 +118,24 @@ describe("camera transitions", () => {
       { kind: "click", t: 1500, x: 560, y: 400, button: "left", bbox: box(530, 380, 60, 40), container: "a" },
       { kind: "click", t: 6000, x: 680, y: 420, button: "left", bbox: box(650, 400, 60, 40), container: "b" },
     ]);
-    const track = computeCameraTrack(tl, FPS);
+    const track = trackOf(tl, FPS);
     // The gap between the groups keeps the camera zoomed (a pan, not a zoom-out).
     expect(cameraAt(track, 3750).scale).toBeGreaterThan(1.4);
   });
 
-  it("eases out gently between two far groups but stays in the app context", () => {
+  it("direct-pans between two far same-page groups (no establishing pull-back)", () => {
     const tl = timeline([
       { kind: "click", t: 1500, x: 200, y: 400, button: "left", bbox: box(170, 380, 60, 40), container: "a" },
       { kind: "click", t: 6000, x: 1120, y: 400, button: "left", bbox: box(1090, 380, 60, 40), container: "b" },
     ]);
-    const track = computeCameraTrack(tl, FPS);
+    const track = trackOf(tl, FPS);
     const hold = cameraAt(track, 1700).scale;
     let minScale = Infinity;
     for (let t = 2200; t <= 5300; t += 100) minScale = Math.min(minScale, cameraAt(track, t).scale);
-    // It does pull back from the group hold (a visible establishing beat)…
-    expect(minScale).toBeLessThan(hold - 0.1);
-    // …but only modestly — it never zooms (nearly) all the way out to a wide
-    // "reset" shot; the camera holds the app shell while it glides across.
-    expect(minScale).toBeGreaterThan(1.2);
+    // The old establishing "dome" is gone: with no navigation between them the
+    // camera stays zoomed and glides straight across (follow-cam) — it never
+    // eases the depth out toward an establish level between the two shots.
+    expect(minScale).toBeGreaterThan(hold - 0.06);
   });
 
   it("lands on a gentle pull-back after the last shot (no full zoom-out outro)", () => {
@@ -140,7 +143,7 @@ describe("camera transitions", () => {
       [{ kind: "click", t: 1500, x: 640, y: 400, button: "left", bbox: box(610, 380, 60, 40), container: "a" }],
       { durationMs: 6000 },
     );
-    const track = computeCameraTrack(tl, FPS);
+    const track = trackOf(tl, FPS);
     // Well after the action settles, the camera holds a gentle landing framing —
     // pulled back from the hold, but not a full zoom-out to wide (scale 1).
     const ending = cameraAt(track, 5800).scale;
@@ -208,7 +211,7 @@ describe("cameraTransform (fit-to-rect, edge-clamped)", () => {
 describe("cameraSpeedAt (synthetic motion-blur driver)", () => {
   it("is ~0 on a settled hold and large during a transition", () => {
     // Settled hold: one steady group, sampled deep into the hold.
-    const loginTrack = computeCameraTrack(login(), 60);
+    const loginTrack = trackOf(login(), 60);
     const hold = cameraSpeedAt(loginTrack, 4800, 1280, 800);
     expect(hold).toBeLessThan(2);
 
@@ -217,7 +220,7 @@ describe("cameraSpeedAt (synthetic motion-blur driver)", () => {
       { kind: "click", t: 1500, x: 200, y: 400, button: "left", bbox: box(170, 380, 60, 40), container: "a" },
       { kind: "click", t: 6000, x: 1120, y: 400, button: "left", bbox: box(1090, 380, 60, 40), container: "b" },
     ]);
-    const farTrack = computeCameraTrack(far, 60);
+    const farTrack = trackOf(far, 60);
     let maxSpeed = 0;
     for (let t = 2200; t <= 5300; t += 50) maxSpeed = Math.max(maxSpeed, cameraSpeedAt(farTrack, t, 1280, 800));
     // The transition moves several × faster than a settled hold (drives blur).

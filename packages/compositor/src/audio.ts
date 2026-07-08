@@ -14,6 +14,7 @@ import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { Timeline } from "./types.js";
 import { resolveBundledFfmpeg, type FfmpegLocation } from "./ffmpeg.js";
+import { outputDurationMs } from "./outro.js";
 
 const SAMPLE_RATE = 44100;
 /** A click that navigates within this window is a transition — skip its tick
@@ -205,7 +206,10 @@ export async function buildAudioTrack(
   workDir: string,
 ): Promise<BuildAudioResult> {
   await mkdir(workDir, { recursive: true });
-  const nSamples = Math.max(1, Math.ceil((timeline.durationMs / 1000) * SAMPLE_RATE));
+  // Match the extended composition length (recording + outro freeze-hold) so the
+  // bed/voiceover pad and fade over the held final frame rather than cutting at
+  // the recording's end.
+  const nSamples = Math.max(1, Math.ceil((outputDurationMs(timeline.durationMs) / 1000) * SAMPLE_RATE));
   const track = new Float32Array(nSamples);
 
   // 1) Music bed (looped + faded), scaled by volume — with VO ducking applied later.

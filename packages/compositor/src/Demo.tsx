@@ -1,10 +1,11 @@
 import React from "react";
-import { AbsoluteFill, OffthreadVideo, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Freeze, OffthreadVideo, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { CameraMotionBlur, Trail } from "@remotion/motion-blur";
 import type { CameraTrack } from "./camera";
 import type { DemoCompositionProps, Timeline } from "./types";
-import { cursorAt, clickPulseAt, cursorPressAt, captionAt, contentStartMs } from "./interp";
-import { computeCameraTrack, cameraAt, cameraTransform, cameraSpeedAt, type CameraTransform } from "./camera";
+import { plannedCursorAt, clickPulseAt, cursorPressAt, captionAt } from "./interp";
+import { cameraAt, cameraTransform, cameraSpeedAt, type CameraTransform } from "./camera";
+import { computeCameraMotion, OUTRO_FADE_MS, IDLE_FADE_MS, type MotionPlan } from "./motionPlan";
 import { Cursor } from "./Cursor";
 import { FRAME, CANVAS, meshBackgroundAt, cardLayout } from "./frame";
 
@@ -28,12 +29,6 @@ const CURSOR_BLUR_MAX = 2;
 const TRAIL_LAYERS = 3; // sampled-mode <Trail> only
 const CURSOR_SMEAR_SPEED_LO = 1500;
 const CURSOR_SMEAR_SPEED_HI = 2800;
-// During a fast camera move the cursor is just travelling to the next target, so
-// fade it down to keep attention on the product (it fades back in as the camera
-// settles on the action). Driven by camera speed (card-space px/frame).
-const CURSOR_FADE_SPEED_LO = 8;
-const CURSOR_FADE_SPEED_HI = 34;
-const CURSOR_FADE_MIN = 0.45;
 // Sampled (high-quality) mode: re-renders children at sub-frame offsets, so
 // render cost ≈ SAMPLED_SAMPLES× the synthetic path. Opt-in only.
 const SAMPLED_SHUTTER = 180;
@@ -85,8 +80,9 @@ export const Demo: React.FC<DemoCompositionProps> = ({
   const vh = timeline.height;
   const radius = framed ? FRAME.radius : 0;
 
-  // The spring camera track is simulated once and sampled per frame.
-  const track = React.useMemo(() => computeCameraTrack(timeline, fps), [timeline, fps]);
+  // The motion plan + spring camera track are computed once (the plan is the
+  // shared source of truth for the cursor and the camera) and sampled per frame.
+  const { track, plan } = React.useMemo(() => computeCameraMotion(timeline, fps), [timeline, fps]);
 
   const caption = captions ? captionAt(timeline, tMs) : null;
 
@@ -103,6 +99,7 @@ export const Demo: React.FC<DemoCompositionProps> = ({
       videoFile={videoFile}
       timeline={timeline}
       track={track}
+      plan={plan}
       zoomOnClick={zoomOnClick}
       vw={vw}
       vh={vh}
@@ -113,6 +110,7 @@ export const Demo: React.FC<DemoCompositionProps> = ({
     <CursorLayer
       timeline={timeline}
       track={track}
+      plan={plan}
       zoomOnClick={zoomOnClick}
       vw={vw}
       vh={vh}
@@ -230,6 +228,7 @@ function camGroupStyle(view: CameraTransform, vw: number, vh: number): React.CSS
 interface LayerProps {
   timeline: Timeline;
   track: CameraTrack;
+  plan: MotionPlan;
   zoomOnClick: boolean;
   vw: number;
   vh: number;
@@ -258,25 +257,30 @@ const VideoLayer: React.FC<LayerProps & { videoFile: string }> = ({
   videoFile,
   timeline,
   track,
+  plan,
   zoomOnClick,
   vw,
   vh,
   syntheticBlur,
 }) => {
   const { tMs, fps, view, blurPx } = useCameraView({ track, zoomOnClick, vw, vh, syntheticBlur });
-  const { durationInFrames } = useVideoConfig();
-  const durationMs = (durationInFrames / fps) * 1000;
+  const outDurationMs = plan.outputDurationMs;
   const pulse = clickPulseAt(timeline, tMs);
 
   // Hide the browser's blank startup page (a white flash) before the first paint,
   // then reveal the content with a short fade; gentle fade-out at the very end.
-  const contentStart = contentStartMs(timeline);
-  const introCover = 1 - clamp01((tMs - (contentStart + 100)) / 240);
-  const outro = clamp01((tMs - (durationMs - 300)) / 300);
+  const introCover = 1 - clamp01((tMs - (plan.contentStartMs + 100)) / 240);
+  const outro = clamp01((tMs - (outDurationMs - OUTRO_FADE_MS)) / OUTRO_FADE_MS);
+
+  // Past the recording the composition extends by the outro freeze-hold, so hold
+  // the final recorded frame (the camera keeps easing to its landing framing).
+  const lastVideoFrame = Math.max(0, Math.round((timeline.durationMs / 1000) * fps) - 1);
 
   return (
     <div style={{ ...camGroupStyle(view, vw, vh), filter: blurFilter(blurPx) }}>
-      <OffthreadVideo src={staticFile(videoFile)} style={{ width: vw, height: vh, display: "block" }} />
+      <Freeze frame={lastVideoFrame} active={tMs >= timeline.durationMs}>
+        <OffthreadVideo src={staticFile(videoFile)} style={{ width: vw, height: vh, display: "block" }} />
+      </Freeze>
 
       {pulse && <Ripple x={pulse.x} y={pulse.y} progress={pulse.progress} />}
 
@@ -300,29 +304,34 @@ const VideoLayer: React.FC<LayerProps & { videoFile: string }> = ({
 const CursorLayer: React.FC<LayerProps & { layoutScale: number }> = ({
   timeline,
   track,
+  plan,
   zoomOnClick,
   vw,
   vh,
   syntheticBlur,
   layoutScale,
 }) => {
-  const { tMs, fps, view, blurPx, camSpeed } = useCameraView({ track, zoomOnClick, vw, vh, syntheticBlur });
+  const { tMs, fps, view, blurPx } = useCameraView({ track, zoomOnClick, vw, vh, syntheticBlur });
   const frameMs = 1000 / fps;
-  const cursor = cursorAt(timeline.cursor, tMs);
+  const cursor = plannedCursorAt(plan, timeline.cursor, tMs);
   const press = cursorPressAt(timeline, tMs);
 
   // The cursor smears less than the content, so cap its blur tighter. It blurs
   // both when the camera moves and when the cursor itself flicks fast — a smooth
-  // motion smear in place of a ghost trail. And it fades while the camera is
-  // travelling (it's relocating, not acting) so it doesn't pull focus mid-pan.
-  const prevCursor = cursorAt(timeline.cursor, Math.max(0, tMs - frameMs));
+  // motion smear in place of a ghost trail. Under the follow-cam this rarely
+  // triggers (travels are speed-capped), which is by design.
+  const prevCursor = plannedCursorAt(plan, timeline.cursor, Math.max(0, tMs - frameMs));
   const cursorSpeed = Math.hypot(cursor.x - prevCursor.x, cursor.y - prevCursor.y) / (frameMs / 1000); // px/s
   const smear = syntheticBlur
     ? clamp01((cursorSpeed - CURSOR_SMEAR_SPEED_LO) / (CURSOR_SMEAR_SPEED_HI - CURSOR_SMEAR_SPEED_LO)) * CURSOR_BLUR_MAX
     : 0;
   const cursorBlur = Math.min(CURSOR_BLUR_MAX, Math.max(blurPx, smear));
-  const cursorOpacity =
-    1 - (1 - CURSOR_FADE_MIN) * clamp01((camSpeed - CURSOR_FADE_SPEED_LO) / (CURSOR_FADE_SPEED_HI - CURSOR_FADE_SPEED_LO));
+  // Visibility = the content gate (hidden until the first content reveals) × the
+  // idle fade (fades out after prolonged stillness, back in before the next
+  // travel departs). The camera-speed fade is gone — the follow-cam makes it
+  // obsolete (the cursor no longer whips against a fast pan).
+  const contentGate = clamp01((tMs - (plan.contentStartMs + 100)) / 200);
+  const cursorOpacity = contentGate * idleFadeOpacity(plan.idleFades, tMs);
 
   // Project a video-space point to screen (card) space through the camera.
   const project = (x: number, y: number) => ({ x: view.tx + x * view.scale, y: view.ty + y * view.scale });
@@ -398,6 +407,27 @@ function clamp(x: number, lo: number, hi: number): number {
 
 function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
+}
+
+/** Smooth Hermite ramp; 0 at a, 1 at b (works for a>b too). */
+function smoothstep01(a: number, b: number, x: number): number {
+  if (a === b) return x >= a ? 1 : 0;
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
+}
+
+/** The idle-fade opacity at `tMs`: 1 normally, dipping toward 0 during each
+ * precomputed idle window (fade out after stillness, fade back in before the
+ * next travel departs). `fadeInAt` may be Infinity (the final hold never returns). */
+function idleFadeOpacity(fades: MotionPlan["idleFades"], tMs: number): number {
+  let op = 1;
+  for (const f of fades) {
+    if (tMs <= f.fadeOutAt || tMs >= f.fadeInAt) continue;
+    const down = 1 - smoothstep01(f.fadeOutAt, f.fadeOutAt + IDLE_FADE_MS, tMs); // 1 → 0
+    const up = smoothstep01(f.fadeInAt - IDLE_FADE_MS, f.fadeInAt, tMs); // 0 → 1
+    op = Math.min(op, Math.max(down, up));
+  }
+  return op;
 }
 
 /** Ease-out cubic, for the ripple expansion. */

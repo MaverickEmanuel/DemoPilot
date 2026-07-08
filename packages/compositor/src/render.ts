@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import type { Timeline } from "./types.js";
 import { buildAudioTrack, muxAudio, wantsAudio, type AudioOptions } from "./audio.js";
 import { resolveBundledFfmpeg } from "./ffmpeg.js";
+import { outputDurationMs } from "./outro.js";
 
 export { resolveBundledFfmpeg, type FfmpegLocation } from "./ffmpeg.js";
 export type { AudioOptions } from "./audio.js";
@@ -134,6 +135,7 @@ export async function renderDemo(opts: RenderDemoOptions): Promise<RenderDemoRes
     width: composition.width,
     height: composition.height,
     fps,
-    durationMs: opts.timeline.durationMs,
+    // The rendered video is extended past the recording by the outro freeze-hold.
+    durationMs: outputDurationMs(opts.timeline.durationMs),
   };
 }
