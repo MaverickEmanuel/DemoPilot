@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/render.ts",
       "default": "./src/render.ts"
+    },
+    "./openscreen": {
+      "types": "./src/openscreen.ts",
+      "default": "./src/openscreen.ts"
     }
   },
   "scripts": {

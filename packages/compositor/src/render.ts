@@ -11,6 +11,11 @@ import { outputDurationMs } from "./outro.js";
 
 export { resolveBundledFfmpeg, type FfmpegLocation } from "./ffmpeg.js";
 export type { AudioOptions } from "./audio.js";
+// NOTE: the OpenScreen exporter (./openscreen) is intentionally NOT re-exported
+// here. It depends on the Remotion browser-bundle motion planner (Bundler module
+// resolution, extensionless imports), which can't be pulled into a NodeNext
+// consumer's typecheck. It's published as the "@demopilot/compositor/openscreen"
+// subpath and loaded at runtime by the MCP server instead.
 
 export interface RenderDemoOptions {
   /** Path to the clean (cursor-less) webm from the player. */
