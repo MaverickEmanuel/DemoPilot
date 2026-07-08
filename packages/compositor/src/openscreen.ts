@@ -127,8 +127,10 @@ export interface OsEditorState {
  * app-level preference.
  */
 export const OS_DEFAULT_APPEARANCE = {
-  /** Background image (an OpenScreen built-in) the blur applies to. */
-  wallpaper: "/wallpapers/wallpaper12.jpg",
+  /** Background the blur applies to — OpenScreen's first built-in wallpaper,
+   *  which is also its own DEFAULT_WALLPAPER (WALLPAPER_PATHS[0]), so no reliance
+   *  on any non-default asset being present. */
+  wallpaper: "/wallpapers/wallpaper1.jpg",
   /** Blurred background. */
   showBlur: true,
   /** Float the video off the edges so background, shadow, and rounding show. */
