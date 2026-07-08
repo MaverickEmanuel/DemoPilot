@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { buildOpenScreenProject, nearestDepth, OS_ZOOM_DEPTH_SCALES } from "../src/openscreen";
+import { assertCleanRecording, buildOpenScreenProject, nearestDepth, OS_ZOOM_DEPTH_SCALES } from "../src/openscreen";
 import type { Timeline } from "../src/types";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +28,21 @@ describe("nearestDepth", () => {
         expect(err).toBeLessThanOrEqual(Math.abs(OS_ZOOM_DEPTH_SCALES[other] - level) + 1e-9);
       }
     }
+  });
+});
+
+describe("assertCleanRecording", () => {
+  const tl = signupFlow();
+
+  it("accepts a recording whose dimensions match the timeline (the clean capture)", () => {
+    expect(() => assertCleanRecording({ width: tl.width, height: tl.height }, tl, "clean.mp4")).not.toThrow();
+  });
+
+  it("rejects a composited render (padded canvas ≠ timeline dimensions)", () => {
+    // renderDemo composites the clean frame onto a fixed 1920×1080 canvas.
+    expect(() => assertCleanRecording({ width: 1920, height: 1080 }, tl, "first-demo.mp4")).toThrow(
+      /CLEAN screen recording/,
+    );
   });
 });
 
