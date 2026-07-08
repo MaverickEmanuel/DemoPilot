@@ -42,20 +42,43 @@ A standalone [Remotion](https://remotion.dev) project. It deliberately keeps its
 own copy of the timeline types (`types.ts`) so the browser bundler never has to
 resolve the Node-only core package.
 
-- **`Demo.tsx`** — composites `OffthreadVideo` (the clean recording) with a
-  redrawn `Cursor`, click ripples, an optional activity-driven zoom, and
-  optional captions. `interp.ts` interpolates cursor position and computes the
-  ripple/zoom/caption envelopes from the timeline. Typing and clicks get
-  separate zooms: nearby fields (each `type` spans `[tStart, t]`) merge into one
-  sustained zoom anchored on the form's bounding box, while each button click
-  gets its own deeper zoom centered on the button. Overlapping zooms are blended
-  (deepest wins the scale, focus is weighted by contribution) so the camera eases
-  onto a button as its click punches in. `defaults.zoom.level`,
-  `defaults.zoom.clickBoost`, and explicit `zoom: in/out` steps tune it.
+- **`motionPlan.ts`** — the **cursor–camera motion plan**: one pure function of
+  `(timeline, fps)` that is the shared source of truth for both the redrawn
+  cursor and the tracking camera. From the recorded action groups it derives
+  *beats*: **travels** (synthesized minimum-jerk arcs between consecutive
+  actions, pinned to the recorded landing sample and speed-capped to a constant
+  *apparent* screen speed), **holds** (the parked windows, where the cursor is
+  verifiably stationary), **navs** (establish-hold windows over navigations), and
+  **shots** (per-group camera windows). Because the shot windows are derived from
+  the travels, the camera *follows* the cursor — it retargets a beat after the
+  cursor departs and glides the same direction, never anticipating against it.
+- **`camera.ts`** — the spring-physics tracking camera. It consumes the plan's
+  shots/navs: a critically-ish-damped spring chases a time-varying `{scale,
+  focus}` target (adaptive depth fits each group's box into an inner safe area).
+  Same-page shot windows abut, so the spring glides straight across (a direct
+  follow-cam pan — there is no establishing "pull-back"); a navigation eases the
+  camera to a calm centered establish framing and holds until the next travel
+  departs, so it never glides over a blank page. `cameraTransform` clamps the
+  applied translate+scale so the content always covers the card.
+- **`interp.ts`** — `plannedCursorAt` samples the plan: a minimum-jerk arc inside
+  a travel, the anchor inside a hold, and otherwise the recorded Catmull-Rom path
+  (so typing/click nuance and pixel-exact click points survive). This *hybrid*
+  ownership keeps recorded samples authoritative within actions and synthesizes
+  only the between-action travels.
+- **`Demo.tsx`** — composites `OffthreadVideo` (the clean recording) with the
+  planned `Cursor`, click ripples, the camera, and optional captions. The cursor
+  is hidden until the first content and fades out only after prolonged stillness
+  (an idle fade), back in just before its next travel. The composition is
+  extended past the recording by an outro freeze-hold (`outro.ts`): the final
+  frame is frozen (`<Freeze>`) while the camera rests on its landing framing, then
+  a final fade. `defaults.zoom.*` (depth, spring, `establishLevel`, `cursorScale`)
+  and explicit `group`/`zoom: in/out` markers tune it; `panThreshold` and
+  `clickBoost` are deprecated no-ops (the per-click punch and dome are gone).
 - **`Root.tsx`** — registers the `Demo` composition; `calculateMetadata` derives
-  dimensions and duration from the timeline.
+  dimensions and the (freeze-hold-extended) duration from the timeline.
 - **`render.ts`** — programmatic render: stages the webm into a temp public dir,
-  bundles, and calls `renderMedia` (Remotion drives its own bundled ffmpeg).
+  bundles, calls `renderMedia` (Remotion drives its own bundled ffmpeg), then
+  mixes/muxes the synthesized audio track (padded to the same extended duration).
 
 ### `@demopilot/mcp-server`
 

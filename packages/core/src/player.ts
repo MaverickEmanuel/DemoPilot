@@ -5,6 +5,7 @@ import { TimelineRecorder, type Timeline } from "./timeline.js";
 import { moveCursor, dwell, type Point } from "./engines/mouse.js";
 import { typeText } from "./engines/typing.js";
 import { resolveLocator, centerOf, geometryOf, toGeometry } from "./locators.js";
+import { mulberry32, hashSeed } from "./rng.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -56,12 +57,15 @@ export async function playDemo(script: DemoScript, opts: PlayOptions): Promise<P
   });
 
   const scale = scaler(script.defaults.speed);
+  // One deterministic PRNG per run, seeded from the script name, so the dwell
+  // jitter is reproducible (same script ⇒ same rhythm).
+  const rng = mulberry32(hashSeed(script.name));
   try {
     // Lead-in so the recording doesn't start mid-motion.
     await sleep(scale(500));
 
     for (const step of script.steps) {
-      cursor = await runStep(session.page, recorder, script, step, cursor);
+      cursor = await runStep(session.page, recorder, script, step, cursor, rng);
     }
 
     // Tail so the last action lingers, readable, before the cut — kept tight so
@@ -93,6 +97,7 @@ async function runStep(
   script: DemoScript,
   step: Step,
   cursor: Point,
+  rng: () => number,
 ): Promise<Point> {
   const { defaults } = script;
   const speed = defaults.speed;
@@ -113,7 +118,7 @@ async function runStep(
     const point = geom.point;
     cursor = await moveCursor(page, recorder, cursor, point, defaults.mousePace, speed);
     // Pre-action dwell: a beat with the cursor on target before it commits.
-    await dwell(scale(defaults.preActionDwell));
+    await dwell(scale(defaults.preActionDwell), rng);
     recorder.click(point.x, point.y, step.click.button ?? "left", toGeometry(geom));
     const urlBefore = page.url();
     await page.mouse.click(point.x, point.y, {
@@ -129,7 +134,7 @@ async function runStep(
     const geom = await geometryOf(locator);
     const point = geom.point;
     cursor = await moveCursor(page, recorder, cursor, point, defaults.mousePace, speed);
-    await dwell(scale(defaults.preActionDwell));
+    await dwell(scale(defaults.preActionDwell), rng);
     await typeText(
       locator,
       recorder,
@@ -147,7 +152,7 @@ async function runStep(
     const locator = resolveLocator(page, step.hover.target);
     const point = await centerOf(locator);
     cursor = await moveCursor(page, recorder, cursor, point, defaults.mousePace, speed);
-    await dwell(scale(defaults.preActionDwell));
+    await dwell(scale(defaults.preActionDwell), rng);
     await locator.hover();
     return cursor;
   }

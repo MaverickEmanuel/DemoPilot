@@ -1,19 +1,22 @@
 // ----------------------------------------------------------------------------
-// Spring-physics tracking camera (fit-to-rect, edge-clamped)
+// Spring-physics tracking camera (fit-to-rect, edge-clamped) — plan-driven.
 //
-// The camera frames one action group at a time. Each group gets a single focus
-// center (the center of its members' union box) and an adaptive depth: the
-// target scale fits the bbox into an inner *safe area* (the viewport inset by a
-// constant margin), so small targets zoom deeper and large regions shallower. A
-// critically-ish-damped spring chases a time-varying *target* {scale, focus},
-// which produces the motion:
+// The camera frames one action group at a time. Each group ("shot") gets a
+// single focus center (the center of its members' union box) and an adaptive
+// depth: the target scale fits the bbox into an inner *safe area* (the viewport
+// inset by a constant margin), so small targets zoom deeper and large regions
+// shallower. A critically-ish-damped spring chases a time-varying *target*
+// {scale, focus}, producing the motion.
 //
-//   • within a group        → hold: target = that group's focus + depth
-//   • between near groups    → PAN: target morphs focus/depth toward the next
-//                              group while staying zoomed (spring glides over)
-//   • between far groups      → HYBRID: a brief establishing beat eases the depth
-//                              out to `establishLevel`, glides, then eases back in
-//   • before/after the demo  → wide (scale 1)
+// The shot *windows* and the navigation establish-holds come from the shared
+// motion plan (motionPlan.ts), which derives them from the synthesized cursor
+// travels. That makes the camera a FOLLOW-cam: it retargets a beat *after* the
+// cursor departs (never anticipating against it) and, between same-page shots,
+// the windows abut so the spring glides directly toward where the cursor is
+// going. On a navigation the target eases to a calm, centered establish framing
+// and holds there until the next travel departs — so the camera never glides
+// over a blank page. There is no establishing "dome" pull-back and no
+// pan-vs-zoom classification; every same-page transition is a direct pan.
 //
 // The spring chases the RAW bbox center (no corner clamping). Framing is handled
 // at apply time by `cameraTransform`, which converts (focus, scale) into a
@@ -21,13 +24,13 @@
 // covers the viewport — no background bleed, and edge/corner elements are framed
 // as far into the corner as geometry allows instead of being clipped.
 //
-// Navigations always cut a group, so the camera never drags a zoom across a page
-// transition. The whole spring is simulated once into a uniform keyframe track;
-// `cameraAt` samples it per frame.
+// The whole spring is simulated once into a uniform keyframe track (extended by
+// the outro freeze-hold); `cameraAt` samples it per frame.
 // ----------------------------------------------------------------------------
 
 import type { Timeline, ZoomConfig, Box } from "./types";
-import { buildActionGroups, type ActionGroup, type Vec } from "./groups";
+import type { ActionGroup, Vec } from "./groups";
+import type { MotionPlan } from "./motionPlan";
 
 export interface CameraState {
   scale: number;
@@ -45,7 +48,7 @@ export interface CameraTransform {
 
 export interface CameraTrack {
   fps: number;
-  /** Uniformly spaced (1/fps) keyframes from t=0 to durationMs. */
+  /** Uniformly spaced (1/fps) keyframes from t=0 to the output duration. */
   frames: CameraState[];
   cursorScale: number;
 }
@@ -53,35 +56,22 @@ export interface CameraTrack {
 const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
 const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
 
-// Lead-in before a group's first action and tail after its last (cinematic hold).
-// Lead is generous so the camera *anticipates* arrival (settles on the next target
-// a beat before it acts); tail is kept tight so the demo stays responsive and the
-// camera moves on to the next beat without dwelling on a finished action.
-const LEAD_MS = 440;
-const TAIL_MS = 580;
-// Minimum establishing gap carved out for a far handoff.
-const GAP_MIN_MS = 220;
 // Box padding before computing depth, for a little breathing room.
 const BOX_PAD = 1.1;
 
-// Far-handoff establishing pull-back. Rather than zooming (nearly) all the way
-// out between far-apart shots — which reads as an awkward "reset" — the camera
-// stays in the app context and pulls back only modestly while it glides to the
-// next target. The establishing depth is the shallower of the two shots reduced
-// by ESTABLISH_DROP, floored by the config's `establishLevel`.
-const ESTABLISH_DROP = 0.28;
 // Outro: after the final action the camera eases to a gentle "landing" framing
 // (a slight pull-back that reveals the result in context) instead of a full
 // zoom-out to a wide, empty shot — which read as a soft, slow reset.
 const OUTRO_REST = 1.12;
 
-interface Resolved {
+export interface Resolved {
   minZoom: number;
   maxZoom: number;
   /** Inner safe-area insets (fraction of viewport) the focus rect is fit into. */
   innerSafeX: number;
   innerSafeY: number;
   establishLevel: number;
+  /** @deprecated Read no more — every same-page transition is a direct pan. */
   panThreshold: number;
   stiffness: number;
   damping: number;
@@ -89,7 +79,7 @@ interface Resolved {
   cursorScale: number;
 }
 
-function resolve(z: ZoomConfig | undefined): Resolved {
+export function resolve(z: ZoomConfig | undefined): Resolved {
   const level = z?.level ?? 1.25;
   return {
     minZoom: z?.minZoom ?? 1.0,
@@ -111,7 +101,7 @@ function resolve(z: ZoomConfig | undefined): Resolved {
 // Adaptive depth: scale that fits the (padded) bbox into the inner safe area.
 // min(safeW/bw, safeH/bh) frames the rect with constant breathing room on every
 // side; clamping to [minZoom, maxZoom] caps how deep a tiny target may punch.
-function depthFor(bbox: Box, vw: number, vh: number, cfg: Resolved): number {
+export function depthFor(bbox: Box, vw: number, vh: number, cfg: Resolved): number {
   const bw = Math.max(1, bbox.width * BOX_PAD);
   const bh = Math.max(1, bbox.height * BOX_PAD);
   const safeW = vw * (1 - 2 * cfg.innerSafeX);
@@ -123,7 +113,7 @@ function depthFor(bbox: Box, vw: number, vh: number, cfg: Resolved): number {
 // The raw bbox center. Framing/clamping is deferred to `cameraTransform`, so the
 // spring is free to chase the true center (even near an edge) without the corner
 // clamping that used to fling edge elements off-screen.
-function anchorFor(bbox: Box): Vec {
+export function anchorFor(bbox: Box): Vec {
   return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
 }
 
@@ -148,142 +138,46 @@ export function cameraTransform(cam: CameraState, vw: number, vh: number): Camer
   return { tx, ty, scale: s };
 }
 
-/** A group resolved into its camera shot: focus window, anchor and depth. */
-interface Shot {
-  focusStart: number;
-  focusEnd: number;
-  anchor: Vec;
-  level: number;
-}
-
-/** Classified transition between two consecutive shots. */
-interface Gap {
-  start: number;
-  end: number;
-  far: boolean;
-  from: Shot;
-  to: Shot;
-}
-
 /** Public: the adaptive depth chosen for a group (exposed for tests). */
 export function groupDepth(group: ActionGroup, timeline: Timeline): number {
   return depthFor(group.bbox, timeline.width, timeline.height, resolve(timeline.zoom));
 }
 
-function buildShots(timeline: Timeline, groups: ActionGroup[], cfg: Resolved): Shot[] {
-  const vw = timeline.width;
-  const vh = timeline.height;
-  const navs = timeline.events.filter((e) => e.kind === "navigate").map((e) => e.t).sort((a, b) => a - b);
-  const lastNavBefore = (t: number) => {
-    let v = -Infinity;
-    for (const n of navs) if (n <= t) v = n;
-    return v;
-  };
-  const firstNavAfter = (t: number) => {
-    for (const n of navs) if (n >= t) return n;
-    return Infinity;
-  };
-
-  const shots: Shot[] = groups.map((g) => {
-    let focusStart = g.tStart - LEAD_MS;
-    let focusEnd = g.tEnd + TAIL_MS;
-    const navB = lastNavBefore(g.tStart);
-    if (Number.isFinite(navB)) focusStart = Math.max(focusStart, navB);
-    const navA = firstNavAfter(g.tEnd);
-    if (Number.isFinite(navA)) focusEnd = Math.min(focusEnd, navA);
-    return {
-      focusStart,
-      focusEnd: Math.max(focusEnd, g.tEnd),
-      anchor: anchorFor(g.bbox),
-      level: depthFor(g.bbox, vw, vh, cfg),
-    };
-  });
-  return shots;
-}
-
-function classifyGaps(timeline: Timeline, groups: ActionGroup[], shots: Shot[], cfg: Resolved): Gap[] {
-  const diag = Math.hypot(timeline.width, timeline.height);
-  const navBetween = (a: number, b: number) =>
-    timeline.events.some((e) => e.kind === "navigate" && e.t > a && e.t < b);
-  const gaps: Gap[] = [];
-  for (let i = 0; i < shots.length - 1; i++) {
-    const a = shots[i];
-    const b = shots[i + 1];
-    const dist = Math.hypot(b.anchor.x - a.anchor.x, b.anchor.y - a.anchor.y);
-    const far = navBetween(groups[i].tEnd, groups[i + 1].tStart) || dist > cfg.panThreshold * diag;
-    const mid = (groups[i].tEnd + groups[i + 1].tStart) / 2;
-    if (far) {
-      // Carve a real establishing gap so the camera can ease out and back in.
-      a.focusEnd = Math.min(a.focusEnd, Math.max(groups[i].tEnd, mid - GAP_MIN_MS / 2));
-      b.focusStart = Math.max(b.focusStart, mid + GAP_MIN_MS / 2);
-    }
-    if (a.focusEnd < b.focusStart) {
-      gaps.push({ start: a.focusEnd, end: b.focusStart, far, from: a, to: b });
-    } else if (!far) {
-      // Near and overlapping: meet at the midpoint so it reads as one continuous pan.
-      const m = clamp(mid, a.focusStart, b.focusEnd);
-      a.focusEnd = m;
-      b.focusStart = m;
+/** The camera's target {scale, x, y} at time t, from the plan's shots and navs.
+ *
+ *   1. inside a nav establish-hold → calm centered establish framing;
+ *   2. inside a shot window        → that shot's anchor/depth (follow-cam glide);
+ *   3. after the last shot         → gentle outro landing;
+ *   4. before the first shot       → wide (the intro reveal zooms in).
+ */
+function targetAt(t: number, plan: MotionPlan, cfg: Resolved, cx: number, cy: number): CameraState {
+  for (const nv of plan.navs) {
+    if (t >= nv.t0 && t < nv.t1) {
+      return { scale: Math.max(cfg.establishLevel, 1), focusX: cx, focusY: cy };
     }
   }
-  return gaps;
-}
-
-/** The camera's target {scale, x, y} at time t, given the resolved shots/gaps. */
-function targetAt(
-  t: number,
-  shots: Shot[],
-  gaps: Gap[],
-  cfg: Resolved,
-  cx: number,
-  cy: number,
-): CameraState {
-  for (const s of shots) {
+  for (const s of plan.shots) {
     if (t >= s.focusStart && t <= s.focusEnd) {
       return { scale: s.level, focusX: s.anchor.x, focusY: s.anchor.y };
     }
   }
-  for (const g of gaps) {
-    if (t > g.start && t < g.end) {
-      const u = (t - g.start) / Math.max(1, g.end - g.start);
-      const ax = lerp(g.from.anchor.x, g.to.anchor.x, u);
-      const ay = lerp(g.from.anchor.y, g.to.anchor.y, u);
-      if (g.far) {
-        // Gentle establishing pull-back: stay in the app context and ease the
-        // depth back only modestly (toward `establish`, not all the way out)
-        // while gliding the focus toward the destination. `establish` never goes
-        // below `establishLevel` (the floor) nor deeper than the bridging base.
-        const dome = Math.sin(Math.PI * u); // 0 → 1 → 0
-        const base = lerp(g.from.level, g.to.level, u);
-        const establish = Math.max(cfg.establishLevel, Math.min(g.from.level, g.to.level) - ESTABLISH_DROP);
-        const scale = lerp(base, Math.min(establish, base), dome);
-        return { scale, focusX: ax, focusY: ay };
-      }
-      // Near: stay zoomed and pan — morph depth and anchor together.
-      return { scale: lerp(g.from.level, g.to.level, u), focusX: ax, focusY: ay };
-    }
-  }
-  // Idle. Before the first shot the camera is wide and the intro reveal zooms in.
-  // After the last shot it eases to a gentle landing framing (a slight pull-back
-  // that shows the result in context) rather than a full zoom-out to wide.
+  const shots = plan.shots;
   if (shots.length && t >= shots[shots.length - 1].focusEnd) {
     return { scale: OUTRO_REST, focusX: cx, focusY: cy };
   }
   return { scale: 1, focusX: cx, focusY: cy };
 }
 
-/** Simulates the spring once and returns a uniform per-frame keyframe track. */
-export function computeCameraTrack(timeline: Timeline, fps: number): CameraTrack {
+/** Simulates the spring once and returns a uniform per-frame keyframe track.
+ * The track spans the output duration (recording + outro freeze-hold), so the
+ * camera rests at the landing framing while the final frame holds. */
+export function computeCameraTrack(timeline: Timeline, fps: number, plan: MotionPlan): CameraTrack {
   const cfg = resolve(timeline.zoom);
   const cx = timeline.width / 2;
   const cy = timeline.height / 2;
-  const groups = buildActionGroups(timeline, cfg.groupGapMs);
-  const shots = buildShots(timeline, groups, cfg);
-  // Single ordered pass: clamps each shot's focus window and emits the gaps.
-  const gaps = classifyGaps(timeline, groups, shots, cfg);
 
   const frameMs = 1000 / fps;
-  const nFrames = Math.max(1, Math.ceil(timeline.durationMs / frameMs) + 1);
+  const nFrames = Math.max(1, Math.ceil(plan.outputDurationMs / frameMs) + 1);
 
   // Spring state. Sub-step the integration for stability independent of fps.
   let s = 1;
@@ -308,7 +202,7 @@ export function computeCameraTrack(timeline: Timeline, fps: number): CameraTrack
     // Integrate up to this frame in fixed sub-steps.
     while (simT < frameT - 1e-9) {
       const dt = Math.min(subDt, frameT - simT);
-      const tgt = targetAt(simT * 1000, shots, gaps, cfg, cx, cy);
+      const tgt = targetAt(simT * 1000, plan, cfg, cx, cy);
       [s, vs] = step(s, vs, tgt.scale, dt);
       [x, vx] = step(x, vx, tgt.focusX, dt);
       [y, vy] = step(y, vy, tgt.focusY, dt);
