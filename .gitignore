@@ -11,6 +11,8 @@ renders/
 *.webm
 *.mp4
 !examples/**/*.mp4
+# README demo media (committed, referenced from README.md)
+!docs/media/*.mp4
 .env
 .env.*
 !.env.example

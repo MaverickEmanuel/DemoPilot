@@ -4,17 +4,19 @@ baseUrl: http://localhost:4321
 viewport:
   width: 1280
   height: 800
-# This demo intentionally declares NO `defaults:` block — it runs entirely on
-# DemoPilot's built-in, content-agnostic defaults: typing/mouse pace, the
-# reading/hold pauses, and the whole auto-zoom camera (adaptive depth, gentle
-# establishing pull-backs that stay in the app context, light motion blur, and
-# the crisp outro landing). Those same defaults apply to ANY app's demo, so this
-# example doubles as a check that the defaults look good unaided. To tune a
-# specific demo, add a `defaults:` block, e.g.:
-#   defaults:
-#     speed: 1.2
-#     postActionHold: 800
-#     zoom: { minZoom: 1.1, maxZoom: 1.7 }
+# This demo runs almost entirely on DemoPilot's built-in, content-agnostic
+# defaults (typing/mouse pace, reading/hold pauses, adaptive-depth auto-zoom,
+# light motion blur, full zoom-out outro) — so it doubles as a check that the
+# defaults look good unaided. The one `defaults:` override below softens the
+# camera spring: with the stock snappier spring, the two back-to-back shot
+# changes around the sign-in → "New Project" → project-name beat land quickly
+# and then sit, which reads as abrupt. A gentler spring (plus a shallower
+# navigation dip) lets the zoom *ease* between shots and take its time.
+defaults:
+  zoom:
+    stiffness: 5          # softer spring — the camera eases between shots instead of snapping
+    damping: 1.0          # critically damped: a smooth settle with no overshoot/bounce
+    establishLevel: 1.2   # shallower navigation dip, so sign-in → project doesn't swing wide then punch back in
 steps:
   - goto: /
   - narrate: First, create your account

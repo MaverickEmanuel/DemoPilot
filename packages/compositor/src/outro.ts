@@ -7,8 +7,9 @@
 // pulling either graph into the other.
 
 /** Freeze-hold appended past the recording so the final frame rests under a
- * settled camera. */
-export const OUTRO_HOLD_MS = 1200;
+ * settled camera. Sized to give the outro's full zoom-out (camera.ts) room to
+ * ease all the way back out and settle before the final fade. */
+export const OUTRO_HOLD_MS = 1500;
 /** Final fade length, anchored to the extended composition end. */
 export const OUTRO_FADE_MS = 500;
 
