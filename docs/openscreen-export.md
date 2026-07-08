@@ -86,7 +86,7 @@ Deliberate choices:
   | Field | Value | Effect |
   | --- | --- | --- |
   | `showBlur` | `true` | blurred background |
-  | `wallpaper` | `/wallpapers/wallpaper12.jpg` | the OpenScreen built-in the blur applies to |
+  | `wallpaper` | `/wallpapers/wallpaper1.jpg` | OpenScreen's first built-in wallpaper (also its `DEFAULT_WALLPAPER`) — the blur applies to it |
   | `padding` | `50` | floats the video so background/shadow/rounding show |
   | `borderRadius` | `4` | rounded edges |
   | `shadowIntensity` | `0.2` | subtle drop shadow |
