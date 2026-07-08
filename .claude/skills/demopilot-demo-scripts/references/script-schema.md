@@ -158,8 +158,8 @@ the acted-on element's size.
 | `minZoom` | number (1–3) |  | `1.15` | Shallowest adaptive zoom |
 | `maxZoom` | number (1–3) |  | `1.55` | Deepest adaptive zoom |
 | `fill` | number (0.2–1) |  | `0.62` | Target frame fill for a group |
-| `establishLevel` | number (1–2) |  | `1.06` | Magnification during a far-jump establishing handoff |
-| `panThreshold` | number (0–1) |  | `0.42` | Anchor distance (fraction of diagonal) above which a jump zooms out |
+| `establishLevel` | number (1–2) |  | `1.06` | Magnification held during a navigation establish beat |
+| `panThreshold` | number (0–1) |  | `0.42` | Deprecated — no longer read; every same-page transition is a direct pan |
 | `stiffness` | number (1–40) |  | `8` | Camera spring frequency (rad/s) |
 | `damping` | number (0.4–2) |  | `0.92` | Camera spring damping ratio |
 | `groupGapMs` | integer (0–∞) |  | `1800` | Max gap (ms) for adjacent actions to merge into one group |

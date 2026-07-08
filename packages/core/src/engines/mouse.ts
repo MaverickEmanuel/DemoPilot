@@ -86,9 +86,14 @@ export async function moveCursor(
  * A pre-action dwell of roughly `ms`, with a little humanizing jitter (±15%) so
  * repeated actions don't tick like a metronome. Callers pass an already
  * speed-scaled duration. A `ms` of 0 dwells not at all.
+ *
+ * The jitter is drawn from an injected PRNG (`rng`, returning [0, 1)) so a run is
+ * reproducible: the player seeds one generator per run from the script name, and
+ * the same script yields the same dwell rhythm. Defaults to `Math.random` for
+ * standalone callers that don't care about determinism.
  */
-export async function dwell(ms = 450): Promise<void> {
+export async function dwell(ms = 450, rng: () => number = Math.random): Promise<void> {
   if (ms <= 0) return;
   const jitter = ms * 0.15;
-  await sleep(ms - jitter + Math.random() * 2 * jitter);
+  await sleep(ms - jitter + rng() * 2 * jitter);
 }
